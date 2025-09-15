@@ -1,0 +1,5 @@
+build
+bin/*.dll
+bin/*.exe
+bin/*.ilk
+bin/*.pdb
