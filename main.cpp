@@ -4,6 +4,7 @@
 
 #include "interval.h"
 #include "helper_math.h"
+#include "minimum_lbvh.h"
 
 inline glm::vec3 to(float3 p)
 {
@@ -17,6 +18,11 @@ inline float3 to(glm::vec3 p)
 inline void DrawAABB(interval::intr3 bound, glm::u8vec3 c, float lineWidth)
 {
     pr::DrawAABB({ bound.x.l, bound.y.l, bound.z.l }, { bound.x.u, bound.y.u, bound.z.u }, c, lineWidth);
+}
+
+inline float3 mirror(float3 x, float3 n, float3 v0)
+{
+    return x + 2.0f * n * dot(n, v0 - x) / dot(n, n);
 }
 
 int main() {
@@ -86,9 +92,27 @@ int main() {
 
         interval::intr3 H = interval::normalize(wi + wo);
 
+        float3 m = mirror(to(P2), normal, vs[0]);
+        DrawSphere(to(m), 0.01f, { 0, 0, 255 });
+
+        {
+            float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
+            float t;
+            float u, v;
+            float3 ng;
+            if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, vs[0], vs[1], vs[2]))
+            {
+                float3 hitP = m + t * rd;
+                DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
+                DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
+            }
+        }
+
         if (interval::intersects(H, interval::make_intr3(normal.x, normal.y, normal.z), 0.01f /* eps */))
         {
             DrawArrow({0, 0, 0}, to(normal), 0.01f, {255, 0, 0});
+
+
         }
         else
         {

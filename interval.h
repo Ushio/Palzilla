@@ -288,6 +288,25 @@ namespace interval
             }
         }
 
+        // mid point on the surface
+        for (int axis = 0; axis < 2; axis++)
+        {
+            int axis_b = (axis + 1) % 3;
+            int axis_c = (axis + 2) % 3;
+
+            if (vs[axis_b][0] * vs[axis_b][1] <= 0.0f && vs[axis_c][0] * vs[axis_c][1] <= 0.0f)
+            {
+                if (0.0f <= vs[axis][1])
+                {
+                    bound[axis][1] = +1.0f;
+                }
+                else
+                {
+                    bound[axis][0] = -1.0f;
+                }
+            }
+        }
+
         return make_intr3(
             { bound[0][0], bound[0][1] },
             { bound[1][0], bound[1][1] },
