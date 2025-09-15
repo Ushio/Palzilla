@@ -178,22 +178,22 @@ namespace interval
         };
     }
 
-    //inline intr dot(intr3 a, intr3 b)
-    //{
-    //    return a.x * b.x + a.y * b.y + a.z * b.z;
-    //}
+    inline intr dot(intr3 a, intr3 b)
+    {
+        return a.x * b.x + a.y * b.y + a.z * b.z;
+    }
 
-    //inline intr3 reflection(intr3 wi, intr3 n)
-    //{
-    //    return n * dot(wi, n) * 2.0f - wi; 
-    //}
+    inline intr3 reflection(intr3 wi, intr3 n)
+    {
+        return n * dot(wi, n) * 2.0f - wi; 
+    }
 
     // Tighter than naiive.
     inline intr3 normalize(intr3 p)
     {
         const float eps = 1.0e-10f;
 
-        if (p.x.l * p.x.u <= 0.0f && p.y.l * p.y.u <= 0.0f && p.y.l * p.y.u <= 0.0f)
+        if (p.x.l * p.x.u <= 0.0f && p.y.l * p.y.u <= 0.0f && p.z.l * p.z.u <= 0.0f)
         {
             return make_intr3(
                 { -1.0f, 1.0f },
