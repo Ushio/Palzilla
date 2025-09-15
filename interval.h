@@ -113,7 +113,6 @@ namespace interval
         intr z;
     };
 
-
     inline intr3 make_intr3(intr x, intr y, intr z)
     {
         return { x, y, z };
@@ -187,6 +186,16 @@ namespace interval
     {
         return n * dot(wi, n) * 2.0f - wi; 
     }
+
+    //inline intr3 normalize_naive(intr3 p)
+    //{
+    //    interval::intr len = interval::sqrt(
+    //        interval::square(p.x) +
+    //        interval::square(p.y) +
+    //        interval::square(p.z)
+    //    );
+    //    return p / len;
+    //}
 
     // Tighter than naiive.
     inline intr3 normalize(intr3 p)
@@ -284,5 +293,21 @@ namespace interval
             { bound[1][0], bound[1][1] },
             { bound[2][0], bound[2][1] }
         );
+    }
+
+    inline bool intersects(intr3 a, intr3 b, float eps)
+    {
+        if (a.x.u + eps < b.x.l || b.x.u + eps < a.x.l)
+        {
+            return false;
+        }
+        if (a.y.u + eps < b.y.l || b.y.u + eps < a.y.l)
+        {
+            return false;
+        }
+        if (a.z.u + eps < b.z.l || b.z.u + eps < a.z.l)
+        {
+            return false;
+        }
     }
 }

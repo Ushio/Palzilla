@@ -14,6 +14,10 @@ inline float3 to(glm::vec3 p)
     return { p.x, p.y, p.z };
 }
 
+inline void DrawAABB(interval::intr3 bound, glm::u8vec3 c, float lineWidth)
+{
+    pr::DrawAABB({ bound.x.l, bound.y.l, bound.z.l }, { bound.x.u, bound.y.u, bound.z.u }, c, lineWidth);
+}
 
 int main() {
     using namespace pr;
@@ -44,11 +48,17 @@ int main() {
         DrawGrid(GridAxis::XZ, 1.0f, 10, { 128, 128, 128 });
         DrawXYZAxis(1.0f);
 
-#if 0
-        static glm::vec3 P = {0, 1, 1 };
-		ManipulatePosition(camera, &P, 0.3f);
+#if 1
+        static glm::vec3 P0 = { 0, 1, 1 };
+        ManipulatePosition(camera, &P0, 0.3f);
 
-        float3 vs[3] = {
+        static glm::vec3 P2 = { 0, 1, -1 };
+        ManipulatePosition(camera, &P2, 0.3f);
+
+        DrawText(P0, "P0");
+        DrawText(P2, "P2");
+
+        static float3 vs[3] = {
             {0.3f, 0.0f, 0.0f},
             {-0.5f, 0.0f, 0.1f},
             {0.1f, 0.0f, 0.6f},
@@ -56,20 +66,41 @@ int main() {
 
         for (int i = 0; i < 3; i++)
         {
+            ManipulatePosition(camera, (glm::vec3*)&vs[i], 0.3f);
+        }
+        for (int i = 0; i < 3; i++)
+        {
             DrawLine(to(vs[i]), to(vs[(i + 1) % 3]), { 255, 255, 255 }, 3);
         }
-
         
         interval::intr3 triangle =
             interval::make_intr3(vs[0].x, vs[0].y, vs[0].z) |
             interval::make_intr3(vs[1].x, vs[1].y, vs[1].z) |
             interval::make_intr3(vs[2].x, vs[2].y, vs[2].z);
+
+        float3 normal = normalize(cross(vs[1] - vs[0], vs[2] - vs[0]));
+
         interval::intr3 n = interval::make_intr3(0.0f, 1.0f, 0.0f);
-        interval::intr3 wi = interval::make_intr3(P.x, P.y, P.z) - triangle;
-        interval::intr3 wo = interval::reflection(wi, n);
+        interval::intr3 wi = interval::normalize( interval::make_intr3(P0.x, P0.y, P0.z) - triangle );
+        interval::intr3 wo = interval::normalize( interval::make_intr3(P2.x, P2.y, P2.z) - triangle );
+
+        interval::intr3 H = interval::normalize(wi + wo);
+
+        if (interval::intersects(H, interval::make_intr3(normal.x, normal.y, normal.z), 0.01f /* eps */))
+        {
+            DrawArrow({0, 0, 0}, to(normal), 0.01f, {255, 0, 0});
+        }
+        else
+        {
+            DrawArrow({ 0, 0, 0 }, to(normal), 0.01f, { 64, 64, 64 });
+        }
+        // interval::intr3 wo = interval::reflection(wi, n);
+
+        // DrawAABB(wo, { 255, 255, 255 }, 1);
+        DrawAABB(H, {255, 255, 255}, 1);
 #endif
 
-#if 1
+#if 0
         static float3 vs[3] = {
             {1.3f, 1.0f, 0.0f},
             {0.7f, 2.0f, -0.3f},
