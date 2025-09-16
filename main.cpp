@@ -54,7 +54,7 @@ int main() {
         DrawGrid(GridAxis::XZ, 1.0f, 10, { 128, 128, 128 });
         DrawXYZAxis(1.0f);
 
-#if 1
+#if 0
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
 
@@ -124,7 +124,7 @@ int main() {
         DrawAABB(H, {255, 255, 255}, 1);
 #endif
 
-#if 0
+#if 1
         static float3 vs[3] = {
             {1.3f, 1.0f, 0.0f},
             {0.7f, 2.0f, -0.3f},
@@ -138,7 +138,7 @@ int main() {
 
         for (int i = 0; i < 3; i++)
         {
-            DrawLine(to(vs[i]), to(vs[(i + 1) % 3]), { 255, 255, 255 }, 3);
+            DrawLine(to(vs[i]), to(vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
         }
 
         float3 lower = { +FLT_MAX, +FLT_MAX, +FLT_MAX };
@@ -168,6 +168,7 @@ int main() {
             interval::make_intr3(vs[0].x, vs[0].y, vs[0].z) |
             interval::make_intr3(vs[1].x, vs[1].y, vs[1].z) |
             interval::make_intr3(vs[2].x, vs[2].y, vs[2].z);
+        DrawAABB(pointOnTriangle, { 128, 128, 128 }, 2);
 
 
         interval::intr len = interval::sqrt(

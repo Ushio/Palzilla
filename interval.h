@@ -11,6 +11,10 @@ namespace interval
     {
         return a > b ? a : b;
     }
+    inline float ss_clamp(float x, float l, float u)
+    {
+        return ss_min(ss_max(x, l), u);
+    }
 
     inline float ss_min_element(float a) {
         return a;
@@ -217,11 +221,99 @@ namespace interval
             {p.z.l, p.z.u},
         };
         float bound[3][2] = {
-            {+INTERVAL_FLT_MAX, -INTERVAL_FLT_MAX},
-            {+INTERVAL_FLT_MAX, -INTERVAL_FLT_MAX},
-            {+INTERVAL_FLT_MAX, -INTERVAL_FLT_MAX},
+            {+2.0f, -2.0f},
+            {+2.0f, -2.0f},
+            {+2.0f, -2.0f},
         };
 
+        // vertices
+        for (int iz = 0; iz < 2; iz++)
+        for (int iy = 0; iy < 2; iy++)
+        for (int ix = 0; ix < 2; ix++)
+        {
+            float x = vs[0][ix];
+            float y = vs[1][iy];
+            float z = vs[2][iz];
+            float xx = x * x;
+            float yy = y * y;
+            float zz = z * z;
+            float len = ss_max(sqrtf(xx + yy + zz), eps);
+            float nx = x / len;
+            float ny = y / len;
+            float nz = z / len;
+            bound[0][0] = ss_min(bound[0][0], nx);
+            bound[1][0] = ss_min(bound[1][0], ny);
+            bound[2][0] = ss_min(bound[2][0], nz);
+            bound[0][1] = ss_max(bound[0][1], nx);
+            bound[1][1] = ss_max(bound[1][1], ny);
+            bound[2][1] = ss_max(bound[2][1], nz);
+        }
+
+        // comments are xy plane case
+        for (int axis = 0; axis < 3; axis++)
+        {
+            int axis_b = (axis + 1) % 3;
+            int axis_c = (axis + 2) % 3;
+            bool xyVisible = 0.0f < vs[axis][0] * vs[axis][1];
+            if (xyVisible)
+            {
+                float near_z = 0.0f < vs[axis][0] ? vs[axis][0] : vs[axis][1];
+                float near_zz = near_z * near_z;
+                bool zeroInRangeX = vs[axis_b][0] * vs[axis_b][1] <= 0.0f;
+                bool zeroInRangeY = vs[axis_c][0] * vs[axis_c][1] <= 0.0f;
+
+                // -x, +x
+                if (zeroInRangeY)
+                {
+                    for (int i = 0; i < 2 ; i++)
+                    {
+                        float x = vs[axis_b][i];
+                        float y = 0.0f;
+                        float len = ss_max(sqrtf(near_zz + x * x + y * y), eps);
+                        float nx = x / len;
+                        bound[axis_b][0] = ss_min(bound[axis_b][0], nx);
+                        bound[axis_b][1] = ss_max(bound[axis_b][1], nx);
+
+                        float nz = near_z / len;
+                        bound[axis][0] = ss_min(bound[axis][0], nz);
+                        bound[axis][1] = ss_max(bound[axis][1], nz);
+                    }
+                }
+                // -y, +y
+                if (zeroInRangeX)
+                {
+                    for (int i = 0; i < 2; i++)
+                    {
+                        float x = 0.0f;
+                        float y = vs[axis_c][i];
+                        float len = ss_max( sqrtf(near_zz + y * y + x * x), eps);
+                        float ny = y / len;
+                        bound[axis_c][0] = ss_min(bound[axis_c][0], ny);
+                        bound[axis_c][1] = ss_max(bound[axis_c][1], ny);
+
+                        float nz = near_z / len;
+                        bound[axis][0] = ss_min(bound[axis][0], nz);
+                        bound[axis][1] = ss_max(bound[axis][1], nz);
+
+                        //if(axis == 2)
+                        //    pr::DrawPoint({ x / len, ny, nz }, { 255, 0, 0 }, 5);
+                    }
+                }
+                if (zeroInRangeX && zeroInRangeY)
+                {
+                    if (0.0f <= vs[axis][1])
+                    {
+                        bound[axis][1] = +1.0f;
+                    }
+                    else
+                    {
+                        bound[axis][0] = -1.0f;
+                    }
+                }
+            }
+        }
+
+#if 0
         for (int iz = 0; iz < 2; iz++)
         for (int iy = 0; iy < 2; iy++)
         for (int ix = 0; ix < 2; ix++)
@@ -289,7 +381,7 @@ namespace interval
         }
 
         // mid point on the surface
-        for (int axis = 0; axis < 2; axis++)
+        for (int axis = 0; axis < 3; axis++)
         {
             int axis_b = (axis + 1) % 3;
             int axis_c = (axis + 2) % 3;
@@ -306,6 +398,7 @@ namespace interval
                 }
             }
         }
+#endif
 
         return make_intr3(
             { bound[0][0], bound[0][1] },
