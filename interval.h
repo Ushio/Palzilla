@@ -249,6 +249,16 @@ namespace interval
             bound[2][1] = ss_max(bound[2][1], nz);
         }
 
+        // The box is at an octant
+        if (0.0f < vs[0][0] * vs[0][1] && 0.0f < vs[1][0] * vs[1][1] && 0.0f < vs[2][0] * vs[2][1])
+        {
+            return make_intr3(
+                { bound[0][0], bound[0][1] },
+                { bound[1][0], bound[1][1] },
+                { bound[2][0], bound[2][1] }
+            );
+        }
+
         // comments are xy plane case
         for (int axis = 0; axis < 3; axis++)
         {
@@ -265,39 +275,34 @@ namespace interval
                 // -x, +x
                 if (zeroInRangeY)
                 {
-                    for (int i = 0; i < 2 ; i++)
-                    {
-                        float x = vs[axis_b][i];
-                        float y = 0.0f;
-                        float len = ss_max(sqrtf(near_zz + x * x + y * y), eps);
-                        float nx = x / len;
-                        bound[axis_b][0] = ss_min(bound[axis_b][0], nx);
-                        bound[axis_b][1] = ss_max(bound[axis_b][1], nx);
+                    float lower_x = vs[axis_b][0];
+                    float upper_x = vs[axis_b][1];
+                    float lower_len = ss_max(sqrtf(near_zz + lower_x * lower_x), eps);
+                    float upper_len = ss_max(sqrtf(near_zz + upper_x * upper_x), eps);
 
-                        float nz = near_z / len;
-                        bound[axis][0] = ss_min(bound[axis][0], nz);
-                        bound[axis][1] = ss_max(bound[axis][1], nz);
-                    }
+                    // x
+                    bound[axis_b][0] = ss_min(bound[axis_b][0], lower_x / lower_len);
+                    bound[axis_b][1] = ss_max(bound[axis_b][1], upper_x / upper_len);
+
+                    // z
+                    bound[axis][0] = ss_min(bound[axis][0], near_z / ss_max(lower_len, upper_len));
+                    bound[axis][1] = ss_max(bound[axis][1], near_z / ss_min(lower_len, upper_len));
                 }
                 // -y, +y
                 if (zeroInRangeX)
                 {
-                    for (int i = 0; i < 2; i++)
-                    {
-                        float x = 0.0f;
-                        float y = vs[axis_c][i];
-                        float len = ss_max( sqrtf(near_zz + y * y + x * x), eps);
-                        float ny = y / len;
-                        bound[axis_c][0] = ss_min(bound[axis_c][0], ny);
-                        bound[axis_c][1] = ss_max(bound[axis_c][1], ny);
+                    float lower_y = vs[axis_c][0];
+                    float upper_y = vs[axis_c][1];
+                    float lower_len = ss_max(sqrtf(near_zz + lower_y * lower_y), eps);
+                    float upper_len = ss_max(sqrtf(near_zz + upper_y * upper_y), eps);
 
-                        float nz = near_z / len;
-                        bound[axis][0] = ss_min(bound[axis][0], nz);
-                        bound[axis][1] = ss_max(bound[axis][1], nz);
+                    // x
+                    bound[axis_c][0] = ss_min(bound[axis_c][0], lower_y / lower_len);
+                    bound[axis_c][1] = ss_max(bound[axis_c][1], upper_y / upper_len);
 
-                        //if(axis == 2)
-                        //    pr::DrawPoint({ x / len, ny, nz }, { 255, 0, 0 }, 5);
-                    }
+                    // z
+                    bound[axis][0] = ss_min(bound[axis][0], near_z / ss_max(lower_len, upper_len));
+                    bound[axis][1] = ss_max(bound[axis][1], near_z / ss_min(lower_len, upper_len));
                 }
                 if (zeroInRangeX && zeroInRangeY)
                 {
