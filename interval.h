@@ -283,10 +283,6 @@ namespace interval
                     // x
                     bound[axis_b][0] = ss_min(bound[axis_b][0], lower_x / lower_len);
                     bound[axis_b][1] = ss_max(bound[axis_b][1], upper_x / upper_len);
-
-                    // z
-                    bound[axis][0] = ss_min(bound[axis][0], near_z / ss_max(lower_len, upper_len));
-                    bound[axis][1] = ss_max(bound[axis][1], near_z / ss_min(lower_len, upper_len));
                 }
                 // -y, +y
                 if (zeroInRangeX)
@@ -299,10 +295,6 @@ namespace interval
                     // x
                     bound[axis_c][0] = ss_min(bound[axis_c][0], lower_y / lower_len);
                     bound[axis_c][1] = ss_max(bound[axis_c][1], upper_y / upper_len);
-
-                    // z
-                    bound[axis][0] = ss_min(bound[axis][0], near_z / ss_max(lower_len, upper_len));
-                    bound[axis][1] = ss_max(bound[axis][1], near_z / ss_min(lower_len, upper_len));
                 }
                 if (zeroInRangeX && zeroInRangeY)
                 {

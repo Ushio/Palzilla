@@ -84,3 +84,35 @@ TEST_CASE("square") {
     }
 }
 
+TEST_CASE("normalize") {
+    using namespace interval;
+
+    PCG rng(103, 178);
+
+    for (int i = 0; i < 1000; i++)
+    {
+        float size = lerp(0.05f, 0.4f, rng.uniformf());
+        float x = lerp(-2.0f, 2.0f, rng.uniformf());
+        float y = lerp(-2.0f, 2.0f, rng.uniformf());
+        float z = lerp(-2.0f, 2.0f, rng.uniformf());
+        intr3 p_interval = make_intr3({ x, x + size }, { y, y + size }, { z, z + size });
+        intr3 p_interval_normalized = normalize(p_interval);
+
+        for (int j = 0; j < 1000; j++)
+        {
+            float x_sample = lerp(p_interval.x.l, p_interval.x.u, rng.uniformf());
+            float y_sample = lerp(p_interval.y.l, p_interval.y.u, rng.uniformf());
+            float z_sample = lerp(p_interval.z.l, p_interval.z.u, rng.uniformf());
+
+            float len = sqrtf(x_sample * x_sample + y_sample * y_sample + z_sample * z_sample);
+
+            x_sample /= len;
+            y_sample /= len;
+            z_sample /= len;
+
+            // conservative test
+            REQUIRE(intersects(p_interval_normalized, make_intr3(x_sample, y_sample, z_sample), 0.00001f));
+        }
+    }
+}
+
