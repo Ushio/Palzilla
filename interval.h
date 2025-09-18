@@ -186,6 +186,15 @@ namespace interval
         return a.x * b.x + a.y * b.y + a.z * b.z;
     }
 
+    inline intr3 relax(intr3 a, float s)
+    {
+        return make_intr3(
+            { a.x.l - s, a.x.u + s },
+            { a.y.l - s, a.y.u + s },
+            { a.z.l - s, a.z.u + s }
+        );
+    }
+
     inline intr3 reflection(intr3 wi, intr3 n)
     {
         return n * dot(wi, n) * 2.0f - wi; 
