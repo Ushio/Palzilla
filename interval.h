@@ -43,7 +43,10 @@ namespace interval
         float l;
         float u;
     };
-
+    inline intr operator-(intr a)
+    {
+        return { -a.u, -a.l };
+    }
     inline intr operator+(intr a, intr b)
     {
         return { a.l + b.l, a.u + b.u };
@@ -121,6 +124,16 @@ namespace interval
     {
         return { x, y, z };
     }
+
+    inline intr3 operator-(intr3 a)
+    {
+        return {
+            - a.x,
+            - a.y,
+            - a.z
+        };
+    }
+
 
     inline intr3 operator|(intr3 a, intr3 b)
     {
@@ -427,5 +440,6 @@ namespace interval
         {
             return false;
         }
+        return true;
     }
 }
