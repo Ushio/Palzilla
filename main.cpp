@@ -25,6 +25,12 @@ inline float3 mirror(float3 x, float3 n, float3 v0)
     return x + 2.0f * n * dot(n, v0 - x) / dot(n, n);
 }
 
+
+struct TriangleAttrib
+{
+    float3 shadingNormals[3];
+};
+
 int main() {
     using namespace pr;
 
@@ -39,6 +45,70 @@ int main() {
     camera.lookat = { 0, 0, 0 };
 
     double e = GetElapsedTime();
+
+
+    SetDataDir(ExecutableDir());
+    AbcArchive archive;
+    std::string err;
+    archive.open(GetDataPath("assets/scene.abc"), err);
+    std::shared_ptr<FScene> scene = archive.readFlat(0, err);
+    std::vector<minimum_lbvh::Triangle> triangles;
+    minimum_lbvh::BVHCPUBuilder builder;
+    std::vector<TriangleAttrib> triangleAttribs;
+
+    scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
+        if (polymesh->visible() == false)
+        {
+            return;
+        }
+        ColumnView<int32_t> faceCounts(polymesh->faceCounts());
+        ColumnView<int32_t> indices(polymesh->faceIndices());
+        ColumnView<glm::vec3> positions(polymesh->positions());
+        ColumnView<glm::vec3> normals(polymesh->normals());
+
+        triangles.clear();
+        triangleAttribs.clear();
+
+        int indexBase = 0;
+        for (int i = 0; i < faceCounts.count(); i++)
+        {
+            int nVerts = faceCounts[i];
+            PR_ASSERT(nVerts == 3);
+            minimum_lbvh::Triangle tri;
+            TriangleAttrib attrib;
+            for (int j = 0; j < nVerts; ++j)
+            {
+                glm::vec3 p = positions[indices[indexBase + j]];
+                tri.vs[j] = { p.x, p.y, p.z };
+
+                glm::vec3 ns = normals[indexBase + j];
+                attrib.shadingNormals[j] = { ns.x, ns.y, ns.z };
+            }
+
+            float3 e0 = tri.vs[1] - tri.vs[0];
+            float3 e1 = tri.vs[2] - tri.vs[1];
+            float3 e2 = tri.vs[0] - tri.vs[2];
+
+            triangles.push_back(tri);
+            triangleAttribs.push_back(attrib);
+            indexBase += nVerts;
+        }
+
+//        if (builder.empty())
+//        {
+//#if 1
+//            Stopwatch sw;
+//            builder.build(triangles.data(), triangles.size(), true /* isParallel */);
+//            printf("build %f\n", sw.elapsed());
+//
+//            builder.validate();
+//#else
+//            Stopwatch sw;
+//            builder.buildByEmbree(triangles.data(), triangles.size(), RTC_BUILD_QUALITY_LOW);
+//            printf("embree build %f\n", sw.elapsed());
+//#endif
+//        }
+        });
 
     while (pr::NextFrame() == false) {
         if (IsImGuiUsingMouse() == false) {
@@ -95,6 +165,7 @@ int main() {
         float3 m = mirror(to(P2), normal, vs[0]);
         DrawSphere(to(m), 0.01f, { 0, 0, 255 });
 
+        float3 hitP = {};
         {
             float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
             float t;
@@ -102,21 +173,20 @@ int main() {
             float3 ng;
             if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, vs[0], vs[1], vs[2]))
             {
-                float3 hitP = m + t * rd;
+                hitP = m + t * rd;
                 DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
                 DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
             }
         }
 
-        if (interval::intersects(H, interval::make_intr3(normal.x, normal.y, normal.z), 0.01f /* eps */))
+        if (interval::intersects(H, interval::make_intr3(normal.x, normal.y, normal.z), 0.01f /* eps */) || 
+            interval::intersects(-H, interval::make_intr3(normal.x, normal.y, normal.z), 0.01f /* eps */))
         {
-            DrawArrow({0, 0, 0}, to(normal), 0.01f, {255, 0, 0});
-
-
+            DrawSphere(to(hitP), 0.04f, {255, 0, 0});
         }
         else
         {
-            DrawArrow({ 0, 0, 0 }, to(normal), 0.01f, { 64, 64, 64 });
+            DrawSphere(to(hitP), 0.01f, { 64, 64, 64 });
         }
         // interval::intr3 wo = interval::reflection(wi, n);
 
@@ -212,7 +282,7 @@ int main() {
 
 #endif
 
-#if 1
+#if 0
         float margin = 0.1f;
 
         static glm::vec3 P0 = { 0, 1, 1 };
@@ -268,6 +338,71 @@ int main() {
         }
 
 #endif
+
+#if 1
+        // test with mesh
+        pr::PrimBegin(pr::PrimitiveMode::Lines);
+
+        for (auto tri : triangles)
+        {
+            for (int j = 0; j < 3; ++j)
+            {
+                float3 v0 = tri.vs[j];
+                float3 v1 = tri.vs[(j + 1) % 3];
+                pr::PrimVertex(to(v0), { 255, 255, 255 });
+                pr::PrimVertex(to(v1), { 255, 255, 255 });
+            }
+        }
+
+        pr::PrimEnd();
+
+        static glm::vec3 P0 = { 0, 0.5f, 0 };
+        ManipulatePosition(camera, &P0, 0.3f);
+
+        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
+        ManipulatePosition(camera, &P2, 0.3f);
+
+        DrawText(P0, "P0");
+        DrawText(P2, "P2");
+
+        for (auto tri : triangles)
+        {
+            interval::intr3 triangle_intr =
+                interval::make_intr3(tri.vs[0].x, tri.vs[0].y, tri.vs[0].z) |
+                interval::make_intr3(tri.vs[1].x, tri.vs[1].y, tri.vs[1].z) |
+                interval::make_intr3(tri.vs[2].x, tri.vs[2].y, tri.vs[2].z);
+
+            interval::intr3 wi_intr = interval::normalize(interval::make_intr3(P0.x, P0.y, P0.z) - triangle_intr);
+            interval::intr3 wo_intr = interval::normalize(interval::make_intr3(P2.x, P2.y, P2.z) - triangle_intr);
+            interval::intr3 H_intr = interval::normalize(wi_intr + wo_intr);
+
+            float3 normal = normalize(cross(tri.vs[1] - tri.vs[0], tri.vs[2] - tri.vs[0]));
+
+            float3 m = mirror(to(P2), normal, tri.vs[0]);
+            float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
+            float t;
+            float u, v;
+            float3 ng;
+            if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+            {
+                float3 hitP = m + t * rd;
+                DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
+                DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
+            }
+
+            if (interval::intersects(H_intr, interval::make_intr3(normal.x, normal.y, normal.z), 1.0e-8f /* eps */) ||
+                interval::intersects(-H_intr, interval::make_intr3(normal.x, normal.y, normal.z), 1.0e-8f /* eps */))
+            {
+                for (int j = 0; j < 3; ++j)
+                {
+                    float3 v0 = tri.vs[j];
+                    float3 v1 = tri.vs[(j + 1) % 3];
+                    DrawLine(to(v0), to(v1), { 255, 255, 0 }, 3);
+                }
+            }
+        }
+
+#endif 
 
         PopGraphicState();
         EndCamera();
