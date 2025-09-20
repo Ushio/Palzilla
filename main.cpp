@@ -32,9 +32,9 @@ inline float3 reflection(float3 wi, float3 n)
 // The result vector is not normalized
 inline float3 refraction(float3 wi /* normalized */, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
 {
-    float cosTheta_i = dot(wi, n);
-    float cos2Theta_t = 1.0f - 1.0f / (eta * eta) * (1.0f - cosTheta_i * cosTheta_i);
-    return -wi + (cosTheta_i - sqrtf(cos2Theta_t) * eta) * n;
+    float3 crs = cross(wi, n);
+    float k = eta * eta - dot(crs, crs);
+    return -wi + (dot(wi, n) - sqrtf(k)) * n;
 }
 
 struct TriangleAttrib
