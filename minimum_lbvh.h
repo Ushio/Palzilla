@@ -257,7 +257,7 @@ namespace minimum_lbvh
 		NodeIndex children[2];
 		AABB aabbs[2];
 		NodeIndex parent;
-		uint32_t oneOfEdges; // wasteful but for simplicity
+		uint32_t context; // wasteful but for simplicity. upper bound of the range after building
 	};
 
 	MINIMUM_LBVH_DEVICE inline void build_lbvh(
@@ -308,10 +308,10 @@ namespace minimum_lbvh
 
 #if defined(MINIMUM_LBVH_KERNELCC)
 			__threadfence();
-			index = atomicExch(&internals[parent].oneOfEdges, index);
+			index = atomicExch(&internals[parent].context, index);
 			__threadfence();
 #else
-			index = InterlockedExchange( &internals[parent].oneOfEdges, index );
+			index = InterlockedExchange( &internals[parent].context, index );
 #endif
 			// == memory barrier ==
 
@@ -323,6 +323,8 @@ namespace minimum_lbvh
 
 			leaf_lower = ss_min(leaf_lower, index);
 			leaf_upper = ss_max(leaf_upper, index);
+
+			internals[parent].context = leaf_upper < nInternals ? leaf_upper : -1;
 
 			node = NodeIndex(parent, false);
 
@@ -492,7 +494,7 @@ namespace minimum_lbvh
 			m_internals.resize(nTriangles - 1);
 			for (int i = 0; i < m_internals.size(); i++)
 			{
-				m_internals[i].oneOfEdges = 0xFFFFFFFF;
+				m_internals[i].context = 0xFFFFFFFF;
 			}
 			m_deltas.resize(nTriangles - 1);
 
@@ -794,7 +796,7 @@ namespace minimum_lbvh
 					0 /*shared*/, stream, args, 0 /*extras*/);
 			}
 
-			sorter.sort({ (uint64_t *)indexedMortons, 0 }, { (uint64_t*)indexedMortonsTmp, 0 }, nTriangles, 0, sizeof(uint32_t) * 8, 0);
+			sorter.sort({ (uint64_t *)indexedMortons, 0 }, { (uint64_t*)indexedMortonsTmp, 0 }, nTriangles, 0, sizeof(uint32_t) * 8, stream);
 
 			{
 				const void* args[] = {
@@ -825,11 +827,10 @@ namespace minimum_lbvh
 					256, 1, 1,
 					0 /*shared*/, stream, args, 0 /*extras*/);
 			}
-			// oroError e = oroStreamSynchronize(stream);
 
-			oroFree(indexedMortons);
-			oroFree(indexedMortonsTmp);
-			oroFree(deltas);
+			oroFreeAsync(indexedMortons, stream);
+			oroFreeAsync(indexedMortonsTmp, stream);
+			oroFreeAsync(deltas, stream);
 
 			sw.stop();
 			printf("%f ms\n", sw.getElapsedMs());
@@ -943,7 +944,7 @@ namespace minimum_lbvh
 		RAY_QUERY_ANY
 	};
 
-	MINIMUM_LBVH_DEVICE inline void intersect(
+	MINIMUM_LBVH_DEVICE inline void intersect_stackfree(
 		Hit* hit,
 		const InternalNode* nodes,
 		const Triangle* triangles,
@@ -1019,6 +1020,82 @@ namespace minimum_lbvh
 			{
 				next_node = parent_node;
 			}
+
+			prev_node = curr_node;
+			curr_node = next_node;
+		}
+	}
+
+	MINIMUM_LBVH_DEVICE inline void intersect_escape_link(
+		Hit* hit,
+		const InternalNode* nodes,
+		const Triangle* triangles,
+		NodeIndex node,
+		float3 ro,
+		float3 rd,
+		float3 one_over_rd,
+		RAY_QUERY rayQuery = RAY_QUERY_CLOSEST)
+	{
+		NodeIndex curr_node = node;
+		NodeIndex prev_node = NodeIndex::invalid();
+
+		while (curr_node != NodeIndex::invalid())
+		{
+			if (curr_node.m_isLeaf)
+			{
+				float t;
+				float u, v;
+				float3 ng;
+				const Triangle& tri = triangles[curr_node.m_index];
+				if (intersectRayTriangle(&t, &u, &v, &ng, 0.0f, hit->t, ro, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+				{
+					hit->t = t;
+					hit->uv = make_float2(u, v);
+					hit->triangleIndex = curr_node.m_index;
+					hit->ng = ng;
+
+					if (rayQuery == RAY_QUERY_ANY)
+					{
+						break;
+					}
+				}
+
+				if (nodes[prev_node.m_index].children[0] == curr_node) // just go next
+				{
+					swap(&curr_node, &prev_node);
+					continue;
+				}
+
+				uint32_t indexOfInternal = nodes[prev_node.m_index].context;
+				NodeIndex next_node = indexOfInternal != -1 ? NodeIndex(indexOfInternal, false) : NodeIndex::invalid();
+
+				prev_node = curr_node;
+				curr_node = next_node;
+				continue;
+			}
+
+			NodeIndex parent_node = nodes[curr_node.m_index].parent;
+			AABB aabb;
+			NodeIndex hitChild;
+			NodeIndex miss;
+			bool decent = prev_node == parent_node;
+			if (decent)
+			{
+				aabb = nodes[curr_node.m_index].aabbs[0];
+				hitChild = nodes[curr_node.m_index].children[0];
+				miss = curr_node;
+			}
+			else
+			{
+				aabb = nodes[curr_node.m_index].aabbs[1];
+				hitChild = nodes[curr_node.m_index].children[1];
+
+				uint32_t indexOfInternal = nodes[curr_node.m_index].context;
+				miss = indexOfInternal != -1 ? NodeIndex(indexOfInternal, false) : NodeIndex::invalid();
+			}
+			float2 range = slabs(ro, one_over_rd, aabb.lower, aabb.upper, hit->t);
+
+			NodeIndex next_node = range.x <= range.y ? hitChild : miss;
 
 			prev_node = curr_node;
 			curr_node = next_node;
