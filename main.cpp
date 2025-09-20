@@ -29,6 +29,14 @@ inline float3 reflection(float3 wi, float3 n)
     return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
 }
 
+// The result vector is not normalized
+inline float3 refraction(float3 wi /* normalized */, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
+{
+    float cosTheta_i = dot(wi, n);
+    float cos2Theta_t = 1.0f - 1.0f / (eta * eta) * (1.0f - cosTheta_i * cosTheta_i);
+    return -wi + (cosTheta_i - sqrtf(cos2Theta_t) * eta) * n;
+}
+
 struct TriangleAttrib
 {
     float3 shadingNormals[3];
@@ -286,7 +294,7 @@ int main() {
 #endif
 
         // reflection
-#if 1
+#if 0
         float margin = 0.1f;
 
         static glm::vec3 P0 = { 0, 1, 1 };
@@ -334,6 +342,35 @@ int main() {
         }
 
 #endif
+
+        // refraction
+        float margin = 0.0f;
+
+        static glm::vec3 P0 = { 0, 1, 1 };
+        ManipulatePosition(camera, &P0, 0.3f);
+
+        static glm::vec3 N = { 0, 1.5f, 0 };
+        ManipulatePosition(camera, &N, 0.3f);
+
+        float3 wi = normalize(to(P0));
+
+        DrawArrow({}, to(wi), 0.01f, { 255, 0, 0 });
+        DrawArrow({}, N, 0.02f, { 0, 255, 255 });
+        DrawText(to(wi), "wi");
+        DrawText(N, "N");
+
+        interval::intr3 wi_range = interval::relax(interval::make_intr3(wi.x, wi.y, wi.z), margin);
+
+        DrawAABB(wi_range, { 255, 0, 0 }, 1);
+
+        float eta = 1.3f;
+        float3 wo = normalize( refraction(wi, normalize(to(N)), 1.3f) );
+
+        DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
+
+        float3 ht = -(wi + wo * eta);
+
+        DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
 
 #if 0
         // test with mesh
