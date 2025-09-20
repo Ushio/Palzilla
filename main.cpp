@@ -24,7 +24,10 @@ inline float3 mirror(float3 x, float3 n, float3 v0)
 {
     return x + 2.0f * n * dot(n, v0 - x) / dot(n, n);
 }
-
+inline float3 reflection(float3 wi, float3 n)
+{
+    return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
+}
 
 struct TriangleAttrib
 {
@@ -282,56 +285,49 @@ int main() {
 
 #endif
 
-#if 0
+        // reflection
+#if 1
         float margin = 0.1f;
 
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
 
-        static glm::vec3 P2 = { 0, 1, -1 };
-        ManipulatePosition(camera, &P2, 0.3f);
+        static glm::vec3 N = { 0, 1.5f, 0 };
+        ManipulatePosition(camera, &N, 0.3f);
 
-
-        float3 wi = normalize(to(P0));
-        float3 wo = normalize(to(P2));
+        float3 wi = to(P0);
 
         DrawArrow({}, to(wi), 0.01f, { 255, 0, 0 });
-        DrawArrow({}, to(wo), 0.01f, { 0, 255, 0 });
+        DrawArrow({}, N, 0.02f, { 0, 255, 255 });
+        DrawText(to(wi), "wi");
+        DrawText(N, "N");
 
         interval::intr3 wi_range = interval::relax(interval::make_intr3(wi.x, wi.y, wi.z), margin);
-        interval::intr3 wo_range = interval::relax(interval::make_intr3(wo.x, wo.y, wo.z), margin);
 
         DrawAABB(wi_range, { 255, 0, 0 }, 1);
+
+        interval::intr3 wo_range = interval::reflection(wi_range, interval::make_intr3(N.x, N.y, N.z));
         DrawAABB(wo_range, { 0, 255, 0 }, 1);
-
-        interval::intr3 h_range = interval::normalize(wi_range + wo_range);
-
-        DrawAABB(h_range, { 255, 255, 255 }, 1);
 
         {
             PCG rng;
 
             float3 lower = { +FLT_MAX, +FLT_MAX, +FLT_MAX };
             float3 upper = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-            for (int i = 0; i < 100000; i++)
+            for (int i = 0; i < 10000; i++)
             {
                 float3 wi_random = {
                     lerp(wi_range.x.l, wi_range.x.u, rng.uniformf()),
                     lerp(wi_range.y.l, wi_range.y.u, rng.uniformf()),
                     lerp(wi_range.z.l, wi_range.z.u, rng.uniformf()),
                 };
-                float3 wo_random = {
-                    lerp(wo_range.x.l, wo_range.x.u, rng.uniformf()),
-                    lerp(wo_range.y.l, wo_range.y.u, rng.uniformf()),
-                    lerp(wo_range.z.l, wo_range.z.u, rng.uniformf()),
-                };
+                
+                float3 wo_random = reflection(wi_random, to(N));
 
-                float3 h = normalize(wi_random + wo_random);
+                DrawPoint(to(wo_random), { 255, 255, 0 }, 1);
 
-                DrawPoint(to(h), { 255, 255, 0 }, 1);
-
-                lower = fminf(lower, h);
-                upper = fmaxf(upper, h);
+                lower = fminf(lower, wo_random);
+                upper = fmaxf(upper, wo_random);
             }
 
             DrawAABB(to(lower), to(upper), { 0, 0, 255 }, 3);
@@ -339,7 +335,7 @@ int main() {
 
 #endif
 
-#if 1
+#if 0
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 

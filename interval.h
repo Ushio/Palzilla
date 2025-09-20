@@ -208,9 +208,34 @@ namespace interval
         );
     }
 
+    //inline intr3 reflection_naive(intr3 wi, intr3 n)
+    //{
+    //    return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
+    //}
+
     inline intr3 reflection(intr3 wi, intr3 n)
     {
-        return n * dot(wi, n) * 2.0f - wi; 
+        float eps = 1.0e-10f;
+        intr nxx = square(n.x);
+        intr nyy = square(n.y);
+        intr nzz = square(n.z);
+        intr nDotn = nxx + nyy + nzz;
+
+        intr s = {
+            2.0f / ss_max(nDotn.u, eps),
+            2.0f / ss_max(nDotn.l, eps)
+        };
+
+        // reflection as a matrix
+        intr m11 = s * nxx - intr(1.0f), m12 = s * n.x * n.y       , m13 = s * n.x * n.z;
+        intr m21 = m12                 , m22 = s * nyy - intr(1.0f), m23 = s * n.y * n.z;
+        intr m31 = m13                 , m32 = m23                 , m33 = s * nzz - intr(1.0f);
+
+        return {
+            m11 * wi.x + m12 * wi.y + m13 * wi.z,
+            m21 * wi.x + m22 * wi.y + m23 * wi.z,
+            m31 * wi.x + m32 * wi.y + m33 * wi.z
+        };
     }
 
     //inline intr3 normalize_naive(intr3 p)
