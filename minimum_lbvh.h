@@ -39,6 +39,12 @@
 
 namespace minimum_lbvh
 {
+	enum BUILD_OPTION
+	{
+		BUILD_OPTION_USE_NORMAL = 1,
+		BUILD_OPTION_CPU_PARALLEL = 2
+	};
+
 	MINIMUM_LBVH_DEVICE uint64_t div_round_up64(uint64_t val, uint64_t divisor) noexcept { return (val + divisor - 1) / divisor; }
 	MINIMUM_LBVH_DEVICE uint64_t next_multiple64(uint64_t val, uint64_t divisor) noexcept { return div_round_up64(val, divisor) * divisor; }
 
@@ -188,6 +194,16 @@ namespace minimum_lbvh
 		return answer;
 	}
 
+	MINIMUM_LBVH_DEVICE inline uint32_t encode32Morton2D(uint16_t x, uint16_t y)
+	{
+		uint64_t res = x | (uint64_t(y) << 32);
+		res = (res | (res << 8)) & 0x00ff00ff00ff00ff;
+		res = (res | (res << 4)) & 0x0f0f0f0f0f0f0f0f;
+		res = (res | (res << 2)) & 0x3333333333333333;
+		res = (res | (res << 1)) & 0x5555555555555555;
+		return uint32_t(res | (res >> 31));
+	}
+
 	struct Triangle
 	{
 		float3 vs[3];
@@ -329,7 +345,7 @@ namespace minimum_lbvh
 			leaf_lower = ss_min(leaf_lower, index);
 			leaf_upper = ss_max(leaf_upper, index);
 
-			internals[parent].context = leaf_upper < nInternals ? leaf_upper : -1;
+			internals[parent].context = leaf_upper < nInternals ? leaf_upper : 0xFFFFFFFF;
 
 			node = NodeIndex(parent, false);
 
@@ -493,7 +509,7 @@ namespace minimum_lbvh
 	class BVHCPUBuilder
 	{
 	public:
-		void build(const Triangle *triangles, int nTriangles, bool isParallel )
+		void build(const Triangle *triangles, int nTriangles, uint32_t buildOption )
 		{
 			m_internals.clear();
 			m_internals.resize(nTriangles - 1);
@@ -520,19 +536,31 @@ namespace minimum_lbvh
 			{
 				Triangle tri = triangles[i];
 				float3 center = (tri.vs[0] + tri.vs[1] + tri.vs[2]) / 3.0f;
-				mortons[i].morton = (uint32_t)( sceneAABB.encodeMortonCode(center) >> 31 ); // take higher 32bits out of 63bits
+
+				if (buildOption & BUILD_OPTION_USE_NORMAL)
+				{
+					float3 ng = normalOf(tri);
+					AABB unit = { {-1, -1, -1}, {+1, +1, +1} };
+					uint32_t nMorton = (uint32_t)(unit.encodeMortonCode(ng) >> 31);
+					uint32_t pMorton = (uint32_t)(sceneAABB.encodeMortonCode(center) >> 31);
+					mortons[i].morton = encode32Morton2D( pMorton >> 16, nMorton >> 16);
+				}
+				else
+				{
+					mortons[i].morton = (uint32_t)( sceneAABB.encodeMortonCode(center) >> 31 ); // take higher 32bits out of 63bits
+				}
 				mortons[i].index = i;
 			}
 			std::sort(mortons.begin(), mortons.end(), [](IndexedMorton a, IndexedMorton b) { return a.morton < b.morton; });
 
 			for (int i = 0; i < m_deltas.size(); i++)
 			{
-				uint32_t mA = mortons[i].morton;
-				uint32_t mB = mortons[i+1].morton;
+				auto mA = mortons[i].morton;
+				auto mB = mortons[i+1].morton;
 				m_deltas[i] = delta(mA, mB);
 			}
 
-			if (isParallel)
+			if (buildOption & BUILD_OPTION_CPU_PARALLEL)
 			{
 				concurrency::parallel_for(size_t(0), mortons.size(), [&](uint32_t i_leaf) {
 					build_lbvh(
@@ -752,7 +780,7 @@ namespace minimum_lbvh
 		BVHGPUBuilder(const BVHGPUBuilder&) = delete;
 		void operator=(const BVHGPUBuilder&) = delete;
 
-		void build(const Triangle* triangles, int nTriangles, tinyhiponesweep::OnesweepSort& sorter, oroStream stream)
+		void build(const Triangle* triangles, int nTriangles, uint32_t buildOption, tinyhiponesweep::OnesweepSort& sorter, oroStream stream)
 		{
 			DeviceStopwatch sw(stream);
 			sw.start();
@@ -793,7 +821,8 @@ namespace minimum_lbvh
 					&indexedMortons,
 					&triangles,
 					&nTriangles,
-					&m_sceneAABB
+					&m_sceneAABB,
+					&buildOption
 				};
 				oroModuleLaunchKernel(m_buildMortons,
 					div_round_up64(nTriangles, 256), 1, 1,
@@ -1072,7 +1101,7 @@ namespace minimum_lbvh
 				}
 
 				uint32_t indexOfInternal = nodes[prev_node.m_index].context;
-				NodeIndex next_node = indexOfInternal != -1 ? NodeIndex(indexOfInternal, false) : NodeIndex::invalid();
+				NodeIndex next_node = indexOfInternal != 0xFFFFFFFF ? NodeIndex(indexOfInternal, false) : NodeIndex::invalid();
 
 				prev_node = curr_node;
 				curr_node = next_node;
@@ -1096,7 +1125,7 @@ namespace minimum_lbvh
 				hitChild = nodes[curr_node.m_index].children[1];
 
 				uint32_t indexOfInternal = nodes[curr_node.m_index].context;
-				miss = indexOfInternal != -1 ? NodeIndex(indexOfInternal, false) : NodeIndex::invalid();
+				miss = indexOfInternal != 0xFFFFFFFF ? NodeIndex(indexOfInternal, false) : NodeIndex::invalid();
 			}
 			float2 range = slabs(ro, one_over_rd, aabb.lower, aabb.upper, hit->t);
 
