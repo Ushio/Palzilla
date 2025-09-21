@@ -94,6 +94,7 @@ int main() {
 
     double e = GetElapsedTime();
 
+    ITexture* texture = CreateTexture();
 
     SetDataDir(ExecutableDir());
     AbcArchive archive;
@@ -215,7 +216,8 @@ int main() {
             UpdateCameraBlenderLike(&camera);
         }
 
-        ClearBackground(0.1f, 0.1f, 0.1f, 1);
+        // ClearBackground(0.1f, 0.1f, 0.1f, 1);
+        ClearBackground(texture);
 
         BeginCamera(camera);
 
@@ -463,7 +465,7 @@ int main() {
         DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
 #endif
 
-#if 1
+#if 0
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -581,6 +583,76 @@ int main() {
             currentNode = stack.top(); stack.pop();
         }
 #endif 
+
+
+
+        // Rendering
+#if 1
+        float3 light_intencity = { 1.0f, 1.0f, 1.0f };
+        static glm::vec3 p_light = { 0, 1, 1 };
+        ManipulatePosition(camera, &p_light, 0.3f);
+        DrawText(p_light, "light");
+
+        int stride = 2;
+        Image2DRGBA8 image;
+        image.allocate(GetScreenWidth() / stride, GetScreenHeight() / stride);
+
+        CameraRayGenerator rayGenerator(GetCurrentViewMatrix(), GetCurrentProjMatrix(), image.width(), image.height());
+
+        //for (int j = 0; j < image.height(); ++j)
+        ParallelFor(image.height(), [&](int j) {
+            for (int i = 0; i < image.width(); ++i)
+            {
+                glm::vec3 ro, rd;
+                rayGenerator.shoot(&ro, &rd, i, j, 0.5f, 0.5f);
+
+                minimum_lbvh::Hit hit;
+                minimum_lbvh::intersect_stackfree(&hit, polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, to(ro), to(rd), minimum_lbvh::invRd(to(rd)));
+                if (hit.t == MINIMUM_LBVH_FLT_MAX)
+                {
+                    image(i, j) = { 0, 0, 0, 255 };
+                    continue;
+                }
+                
+                float3 p = to(ro) + to(rd) * hit.t;
+                float3 n = normalize(hit.ng);
+
+                if (0.0f < dot(n, to(rd)))
+                {
+                    n = -n;
+                }
+
+                //float3 color = (n + make_float3(1.0f)) * 0.5f;
+                //image(i, j) = { 255 * color.x, 255 * color.y, 255 * color.z, 255 };
+
+                float3 toLight = to(p_light) - p;
+                float d2 = dot(toLight, toLight);
+                float3 reflectance = { 0.75f, 0.75f, 0.75f };
+                
+                float3 L = {};
+
+                float3 v_ro = p + n * 1.0e-6f;
+                float3 v_rd = normalize(toLight);
+                minimum_lbvh::Hit v_hit;
+                minimum_lbvh::intersect_stackfree(&v_hit, polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, v_ro, v_rd, minimum_lbvh::invRd(v_rd));
+
+                if (v_hit.t == MINIMUM_LBVH_FLT_MAX)
+                {
+                    L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
+                }
+
+                float3 color = clamp(L, 0.0f, 1.0f);
+                image(i, j) = { 
+                    255 * powf(color.x, 1.0f / 2.2f), 
+                    255 * powf(color.y, 1.0f / 2.2f), 
+                    255 * powf(color.z, 1.0f / 2.2f), 255};
+            };
+        }
+        );
+
+        texture->upload(image);
+
+#endif
 
         PopGraphicState();
         EndCamera();
