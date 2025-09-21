@@ -119,7 +119,7 @@ int main() {
     Initialize(config);
 
     Camera3D camera;
-    camera.origin = { 4, 4, 4 };
+    camera.origin = { 2, 2, 2 };
     camera.lookat = { 0, 0, 0 };
 
     double e = GetElapsedTime();
@@ -188,7 +188,7 @@ int main() {
     });
 
     {
-        polygonSoup.builder.build(polygonSoup.triangles.data(), polygonSoup.triangles.size(), false /* isParallel */);
+        polygonSoup.builder.build(polygonSoup.triangles.data(), polygonSoup.triangles.size(), minimum_lbvh::BUILD_OPTION_CPU_PARALLEL);
 
         for (int i = 0; i < polygonSoup.triangles.size(); i++)
         {
@@ -199,7 +199,7 @@ int main() {
             }
         }
 
-        mirrorPolygonSoup.builder.build(mirrorPolygonSoup.triangles.data(), mirrorPolygonSoup.triangles.size(), false /* isParallel */);
+        mirrorPolygonSoup.builder.build(mirrorPolygonSoup.triangles.data(), mirrorPolygonSoup.triangles.size(), minimum_lbvh::BUILD_OPTION_USE_NORMAL );
         mirrorPolygonSoup.internalsNormalBound.resize(polygonSoup.triangles.size() - 1);
 
         minimum_lbvh::InternalNode* internals = mirrorPolygonSoup.builder.m_internals.data();

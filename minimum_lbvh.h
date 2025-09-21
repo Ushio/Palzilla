@@ -543,7 +543,7 @@ namespace minimum_lbvh
 					AABB unit = { {-1, -1, -1}, {+1, +1, +1} };
 					uint32_t nMorton = (uint32_t)(unit.encodeMortonCode(ng) >> 31);
 					uint32_t pMorton = (uint32_t)(sceneAABB.encodeMortonCode(center) >> 31);
-					mortons[i].morton = encode32Morton2D( pMorton >> 16, nMorton >> 16);
+					mortons[i].morton = (pMorton & 0xFFFFFFC0) | (nMorton >> 26);
 				}
 				else
 				{
