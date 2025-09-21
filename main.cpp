@@ -69,6 +69,7 @@ struct PolygonSoup
 struct InternalNormalBound
 {
     minimum_lbvh::AABB normalBounds[2];
+    uint32_t counter;
 };
 struct MirrorPolygonSoup
 {
@@ -170,11 +171,6 @@ int main() {
         mirrorPolygonSoup.builder.build(mirrorPolygonSoup.triangles.data(), mirrorPolygonSoup.triangles.size(), false /* isParallel */);
         mirrorPolygonSoup.internalsNormalBound.resize(polygonSoup.triangles.size() - 1);
 
-        for (uint32_t i = 0; i < mirrorPolygonSoup.builder.m_internals.size(); i++)
-        {
-            mirrorPolygonSoup.builder.m_internals[i].context = 0;
-        }
-
         minimum_lbvh::InternalNode* internals = mirrorPolygonSoup.builder.m_internals.data();
         InternalNormalBound* internalsNormalBound = mirrorPolygonSoup.internalsNormalBound.data();
         for (uint32_t i = 0; i < mirrorPolygonSoup.builder.m_internals.size(); i++)
@@ -198,7 +194,7 @@ int main() {
                     int childIndex = internals[parent.m_index].children[0] == me ? 0 : 1;
                     internalsNormalBound[parent.m_index].normalBounds[childIndex] = normalBound;
 
-                    uint32_t vindex = internals[parent.m_index].context++;
+                    uint32_t vindex = internalsNormalBound[parent.m_index].counter++;
 
                     if (vindex == 0)
                     {
