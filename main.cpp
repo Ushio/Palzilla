@@ -79,6 +79,36 @@ struct MirrorPolygonSoup
     std::vector<TriangleAttrib> triangleAttribs;
 };
 
+inline bool occluded(
+    const minimum_lbvh::InternalNode* nodes,
+    const minimum_lbvh::Triangle* triangles,
+    minimum_lbvh::NodeIndex node,
+    float3 from,
+    float3 from_n,
+    float3 to,
+    float3 to_n )
+{
+    if (dot(to - from, from_n) < 0.0f)
+    {
+        from_n = -from_n;
+    }
+    if (dot(from - to, to_n) < 0.0f)
+    {
+        to_n = -to_n;
+    }
+
+    float eps = 1.0e-6f;
+    float3 from_safe = from + from_n * eps;
+    float3 to_safe = to + to_n * eps;
+
+    float3 rd = to_safe - from_safe;
+
+    minimum_lbvh::Hit hit;
+    hit.t = 1.0f;
+    minimum_lbvh::intersect_stackfree(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
+    return hit.t < 1.0f;
+}
+
 int main() {
     using namespace pr;
 
@@ -622,6 +652,13 @@ int main() {
                     n = -n;
                 }
 
+                if (polygonSoup.triangleAttribs[hit.triangleIndex].material == Material::Mirror)
+                {
+                    // handle later
+                    image(i, j) = { 0, 255, 255, 255 };
+                    continue;
+                }
+
                 //float3 color = (n + make_float3(1.0f)) * 0.5f;
                 //image(i, j) = { 255 * color.x, 255 * color.y, 255 * color.z, 255 };
 
@@ -631,15 +668,69 @@ int main() {
                 
                 float3 L = {};
 
-                float3 v_ro = p + n * 1.0e-6f;
-                float3 v_rd = normalize(toLight);
-                minimum_lbvh::Hit v_hit;
-                minimum_lbvh::intersect_stackfree(&v_hit, polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, v_ro, v_rd, minimum_lbvh::invRd(v_rd));
-
-                if (v_hit.t == MINIMUM_LBVH_FLT_MAX)
+                bool invisible = occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, to(p_light), { 0, 0, 0 });
+                if (!invisible)
                 {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
+
+                interval::intr3 p_to   = interval::make_intr3(p_light.x, p_light.y, p_light.z);
+                interval::intr3 p_from = interval::make_intr3(p.x, p.y, p.z);
+
+                std::stack<minimum_lbvh::NodeIndex> stack;
+                stack.push(minimum_lbvh::NodeIndex::invalid());
+                minimum_lbvh::NodeIndex currentNode = mirrorPolygonSoup.builder.m_rootNode;
+
+                while (currentNode != minimum_lbvh::NodeIndex::invalid())
+                {
+                    if (currentNode.m_isLeaf)
+                    {
+                        minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[currentNode.m_index];
+
+                        float3 normal = minimum_lbvh::normalOf(tri);
+                        float3 m = mirror(p, normal, tri.vs[0]);
+                        float3 rd = make_float3(p_light.x, p_light.y, p_light.z) - m;
+                        float t;
+                        float u, v;
+                        float3 ng_triangle;
+                        if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng_triangle, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+                        {
+                            float3 hitP = m + t * rd;
+
+                            bool invisible =
+                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, hitP, normalize(ng_triangle)) ||
+                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, hitP, normalize(ng_triangle), to(p_light), { 0, 0, 0 });
+
+                            if (!invisible)
+                            {
+                                float d2 = dot(rd, rd);
+                                L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(hitP - p), n), 0.0f);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < 2; i++)
+                        {
+                            interval::intr3 triangle_intr = toIntr3(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].aabbs[i]);
+
+                            interval::intr3 wi_intr = interval::normalize(p_to - triangle_intr);
+                            interval::intr3 wo_intr = interval::normalize(p_from - triangle_intr);
+
+                            interval::intr3 h_intr = interval::normalize(wi_intr + wo_intr);
+                            interval::intr3 normal_intr = toIntr3(mirrorPolygonSoup.internalsNormalBound[currentNode.m_index].normalBounds[i]);
+
+                            if (interval::intersects(h_intr, normal_intr, 1.0e-8f /* eps */) ||
+                                interval::intersects(-h_intr, normal_intr, 1.0e-8f /* eps */))
+                            {
+                                stack.push(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].children[i]);
+                            }
+                        }
+                    }
+
+                    currentNode = stack.top(); stack.pop();
+                }
+
 
                 float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 
