@@ -1,6 +1,7 @@
 ﻿#include "pr.hpp"
 #include <iostream>
 #include <memory>
+#include <stack>
 
 #include "interval.h"
 #include "helper_math.h"
@@ -37,8 +38,24 @@ inline float3 refraction(float3 wi /* normalized */, float3 n /* normalized */, 
     return -wi + (dot(wi, n) - sqrtf(k)) * n;
 }
 
+inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
+{
+    return {
+        {aabb.lower.x, aabb.upper.x},
+        {aabb.lower.y, aabb.upper.y},
+        {aabb.lower.z, aabb.upper.z}
+    };
+}
+
+enum class Material
+{
+    Diffuse,
+    Mirror,
+};
+
 struct TriangleAttrib
 {
+    Material material;
     float3 shadingNormals[3];
 };
 
@@ -67,18 +84,36 @@ int main() {
     minimum_lbvh::BVHCPUBuilder builder;
     std::vector<TriangleAttrib> triangleAttribs;
 
+    std::vector<minimum_lbvh::Triangle> mirror_triangles;
+
+    struct InternalNormalBound
+    {
+        minimum_lbvh::AABB normalBounds[2];
+    };
+
+    std::vector<InternalNormalBound> internalsNormalBound;
+
     scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
         if (polymesh->visible() == false)
         {
             return;
         }
+
+        AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
+        Material material = Material::Diffuse;
+        if (auto matCol = details->columnAsString("material"))
+        {
+            const std::string& matString = details->columnAsString("material")->get(0);
+            if (matString == "mirror")
+            {
+                material = Material::Mirror;
+            }
+        }
+
         ColumnView<int32_t> faceCounts(polymesh->faceCounts());
         ColumnView<int32_t> indices(polymesh->faceIndices());
         ColumnView<glm::vec3> positions(polymesh->positions());
         ColumnView<glm::vec3> normals(polymesh->normals());
-
-        triangles.clear();
-        triangleAttribs.clear();
 
         int indexBase = 0;
         for (int i = 0; i < faceCounts.count(); i++)
@@ -87,6 +122,7 @@ int main() {
             PR_ASSERT(nVerts == 3);
             minimum_lbvh::Triangle tri;
             TriangleAttrib attrib;
+            attrib.material = material;
             for (int j = 0; j < nVerts; ++j)
             {
                 glm::vec3 p = positions[indices[indexBase + j]];
@@ -104,22 +140,58 @@ int main() {
             triangleAttribs.push_back(attrib);
             indexBase += nVerts;
         }
+    });
 
-//        if (builder.empty())
-//        {
-//#if 1
-//            Stopwatch sw;
-//            builder.build(triangles.data(), triangles.size(), true /* isParallel */);
-//            printf("build %f\n", sw.elapsed());
-//
-//            builder.validate();
-//#else
-//            Stopwatch sw;
-//            builder.buildByEmbree(triangles.data(), triangles.size(), RTC_BUILD_QUALITY_LOW);
-//            printf("embree build %f\n", sw.elapsed());
-//#endif
-//        }
-        });
+    if (builder.empty())
+    {
+        Stopwatch sw;
+        builder.build(triangles.data(), triangles.size(), false /* isParallel */);
+        printf("build %f\n", sw.elapsed());
+
+        internalsNormalBound.resize(triangles.size() - 1);
+
+        for (uint32_t i = 0; i < builder.m_internals.size(); i++)
+        {
+            builder.m_internals[i].context = 0;
+        }
+
+        minimum_lbvh::InternalNode* internals = builder.m_internals.data();
+        for (uint32_t i = 0; i < builder.m_internals.size(); i++)
+        {
+            for (int j = 0; j < 2; j++)
+            {
+                minimum_lbvh::NodeIndex me = internals[i].children[j];
+                if (!me.m_isLeaf)
+                {
+                    continue;
+                }
+
+                minimum_lbvh::NodeIndex parent(i, false);
+
+                minimum_lbvh::Triangle tri = triangles[me.m_index];
+                float3 normal = minimum_lbvh::normalOf(tri);
+                minimum_lbvh::AABB normalBound = { normal, normal };
+
+                while (parent != minimum_lbvh::NodeIndex::invalid())
+                {
+                    int childIndex = internals[parent.m_index].children[0] == me ? 0 : 1;
+                    internalsNormalBound[parent.m_index].normalBounds[childIndex] = normalBound;
+
+                    uint32_t vindex = builder.m_internals[parent.m_index].context++;
+
+                    if (vindex == 0)
+                    {
+                        break;
+                    }
+
+                    normalBound.extend(internalsNormalBound[parent.m_index].normalBounds[childIndex ^ 0x1]);
+
+                    me = parent;
+                    parent = internals[me.m_index].parent;
+                }
+            }
+        }
+    }
 
     while (pr::NextFrame() == false) {
         if (IsImGuiUsingMouse() == false) {
@@ -343,6 +415,7 @@ int main() {
 
 #endif
 
+#if 0
         // refraction
         float margin = 0.0f;
 
@@ -371,8 +444,9 @@ int main() {
         float3 ht = -(wi + wo * eta);
 
         DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
+#endif
 
-#if 0
+#if 1
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -398,6 +472,9 @@ int main() {
         DrawText(P0, "P0");
         DrawText(P2, "P2");
 
+        // Brute force search 
+
+        if(0)
         for (auto tri : triangles)
         {
             interval::intr3 triangle_intr =
@@ -409,7 +486,7 @@ int main() {
             interval::intr3 wo_intr = interval::normalize(interval::make_intr3(P2.x, P2.y, P2.z) - triangle_intr);
             interval::intr3 H_intr = interval::normalize(wi_intr + wo_intr);
 
-            float3 normal = normalize(cross(tri.vs[1] - tri.vs[0], tri.vs[2] - tri.vs[0]));
+            float3 normal = minimum_lbvh::normalOf(tri);
 
             float3 m = mirror(to(P2), normal, tri.vs[0]);
             float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
@@ -435,6 +512,57 @@ int main() {
             }
         }
 
+        std::stack<minimum_lbvh::NodeIndex> stack;
+        stack.push(minimum_lbvh::NodeIndex::invalid());
+        minimum_lbvh::NodeIndex currentNode = builder.m_rootNode;
+
+        if (1)
+        while (currentNode != minimum_lbvh::NodeIndex::invalid())
+        {
+            if (currentNode.m_isLeaf)
+            {
+                minimum_lbvh::Triangle tri = triangles[currentNode.m_index];
+                for (int j = 0; j < 3; ++j)
+                {
+                    float3 v0 = tri.vs[j];
+                    float3 v1 = tri.vs[(j + 1) % 3];
+                    DrawLine(to(v0), to(v1), { 255, 255, 0 }, 3);
+                }
+                float3 normal = minimum_lbvh::normalOf(tri);
+                float3 m = mirror(to(P2), normal, tri.vs[0]);
+                float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
+                float t;
+                float u, v;
+                float3 ng;
+                if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+                {
+                    float3 hitP = m + t * rd;
+                    DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
+                    DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    interval::intr3 triangle_intr = toIntr3(builder.m_internals[currentNode.m_index].aabbs[i]);
+
+                    interval::intr3 wi_intr = interval::normalize(interval::make_intr3(P0.x, P0.y, P0.z) - triangle_intr);
+                    interval::intr3 wo_intr = interval::normalize(interval::make_intr3(P2.x, P2.y, P2.z) - triangle_intr);
+
+                    interval::intr3 h_intr = interval::normalize(wi_intr + wo_intr);
+                    interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.m_index].normalBounds[i]);
+
+                    if (interval::intersects(h_intr, normal_intr, 1.0e-8f /* eps */) ||
+                        interval::intersects(-h_intr, normal_intr, 1.0e-8f /* eps */))
+                    {
+                        stack.push(builder.m_internals[currentNode.m_index].children[i]);
+                    }
+                }
+            }
+
+            currentNode = stack.top(); stack.pop();
+        }
 #endif 
 
         PopGraphicState();
