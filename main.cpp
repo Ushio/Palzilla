@@ -59,6 +59,25 @@ struct TriangleAttrib
     float3 shadingNormals[3];
 };
 
+struct PolygonSoup
+{
+    minimum_lbvh::BVHCPUBuilder builder;
+    std::vector<minimum_lbvh::Triangle> triangles;
+    std::vector<TriangleAttrib> triangleAttribs;
+};
+
+struct InternalNormalBound
+{
+    minimum_lbvh::AABB normalBounds[2];
+};
+struct MirrorPolygonSoup
+{
+    minimum_lbvh::BVHCPUBuilder builder;
+    std::vector<InternalNormalBound> internalsNormalBound;
+    std::vector<minimum_lbvh::Triangle> triangles;
+    std::vector<TriangleAttrib> triangleAttribs;
+};
+
 int main() {
     using namespace pr;
 
@@ -80,18 +99,12 @@ int main() {
     std::string err;
     archive.open(GetDataPath("assets/scene.abc"), err);
     std::shared_ptr<FScene> scene = archive.readFlat(0, err);
-    std::vector<minimum_lbvh::Triangle> triangles;
-    minimum_lbvh::BVHCPUBuilder builder;
-    std::vector<TriangleAttrib> triangleAttribs;
 
-    std::vector<minimum_lbvh::Triangle> mirror_triangles;
+    // all included
+    PolygonSoup polygonSoup;
 
-    struct InternalNormalBound
-    {
-        minimum_lbvh::AABB normalBounds[2];
-    };
-
-    std::vector<InternalNormalBound> internalsNormalBound;
+    // mirror 
+    MirrorPolygonSoup mirrorPolygonSoup;
 
     scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
         if (polymesh->visible() == false)
@@ -136,27 +149,35 @@ int main() {
             float3 e1 = tri.vs[2] - tri.vs[1];
             float3 e2 = tri.vs[0] - tri.vs[2];
 
-            triangles.push_back(tri);
-            triangleAttribs.push_back(attrib);
+            polygonSoup.triangles.push_back(tri);
+            polygonSoup.triangleAttribs.push_back(attrib);
             indexBase += nVerts;
         }
     });
 
-    if (builder.empty())
     {
-        Stopwatch sw;
-        builder.build(triangles.data(), triangles.size(), false /* isParallel */);
-        printf("build %f\n", sw.elapsed());
+        polygonSoup.builder.build(polygonSoup.triangles.data(), polygonSoup.triangles.size(), false /* isParallel */);
 
-        internalsNormalBound.resize(triangles.size() - 1);
-
-        for (uint32_t i = 0; i < builder.m_internals.size(); i++)
+        for (int i = 0; i < polygonSoup.triangles.size(); i++)
         {
-            builder.m_internals[i].context = 0;
+            if (polygonSoup.triangleAttribs[i].material == Material::Mirror)
+            {
+                mirrorPolygonSoup.triangles.push_back(polygonSoup.triangles[i]);
+                mirrorPolygonSoup.triangleAttribs.push_back(polygonSoup.triangleAttribs[i]);
+            }
         }
 
-        minimum_lbvh::InternalNode* internals = builder.m_internals.data();
-        for (uint32_t i = 0; i < builder.m_internals.size(); i++)
+        mirrorPolygonSoup.builder.build(mirrorPolygonSoup.triangles.data(), mirrorPolygonSoup.triangles.size(), false /* isParallel */);
+        mirrorPolygonSoup.internalsNormalBound.resize(polygonSoup.triangles.size() - 1);
+
+        for (uint32_t i = 0; i < mirrorPolygonSoup.builder.m_internals.size(); i++)
+        {
+            mirrorPolygonSoup.builder.m_internals[i].context = 0;
+        }
+
+        minimum_lbvh::InternalNode* internals = mirrorPolygonSoup.builder.m_internals.data();
+        InternalNormalBound* internalsNormalBound = mirrorPolygonSoup.internalsNormalBound.data();
+        for (uint32_t i = 0; i < mirrorPolygonSoup.builder.m_internals.size(); i++)
         {
             for (int j = 0; j < 2; j++)
             {
@@ -168,7 +189,7 @@ int main() {
 
                 minimum_lbvh::NodeIndex parent(i, false);
 
-                minimum_lbvh::Triangle tri = triangles[me.m_index];
+                minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[me.m_index];
                 float3 normal = minimum_lbvh::normalOf(tri);
                 minimum_lbvh::AABB normalBound = { normal, normal };
 
@@ -177,7 +198,7 @@ int main() {
                     int childIndex = internals[parent.m_index].children[0] == me ? 0 : 1;
                     internalsNormalBound[parent.m_index].normalBounds[childIndex] = normalBound;
 
-                    uint32_t vindex = builder.m_internals[parent.m_index].context++;
+                    uint32_t vindex = internals[parent.m_index].context++;
 
                     if (vindex == 0)
                     {
@@ -450,7 +471,7 @@ int main() {
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
-        for (auto tri : triangles)
+        for (auto tri : polygonSoup.triangles)
         {
             for (int j = 0; j < 3; ++j)
             {
@@ -475,7 +496,7 @@ int main() {
         // Brute force search 
 
         if(0)
-        for (auto tri : triangles)
+        for (auto tri : mirrorPolygonSoup.triangles)
         {
             interval::intr3 triangle_intr =
                 interval::make_intr3(tri.vs[0].x, tri.vs[0].y, tri.vs[0].z) |
@@ -514,14 +535,14 @@ int main() {
 
         std::stack<minimum_lbvh::NodeIndex> stack;
         stack.push(minimum_lbvh::NodeIndex::invalid());
-        minimum_lbvh::NodeIndex currentNode = builder.m_rootNode;
+        minimum_lbvh::NodeIndex currentNode = mirrorPolygonSoup.builder.m_rootNode;
 
         if (1)
         while (currentNode != minimum_lbvh::NodeIndex::invalid())
         {
             if (currentNode.m_isLeaf)
             {
-                minimum_lbvh::Triangle tri = triangles[currentNode.m_index];
+                minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[currentNode.m_index];
                 for (int j = 0; j < 3; ++j)
                 {
                     float3 v0 = tri.vs[j];
@@ -545,18 +566,18 @@ int main() {
             {
                 for (int i = 0; i < 2; i++)
                 {
-                    interval::intr3 triangle_intr = toIntr3(builder.m_internals[currentNode.m_index].aabbs[i]);
+                    interval::intr3 triangle_intr = toIntr3(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].aabbs[i]);
 
                     interval::intr3 wi_intr = interval::normalize(interval::make_intr3(P0.x, P0.y, P0.z) - triangle_intr);
                     interval::intr3 wo_intr = interval::normalize(interval::make_intr3(P2.x, P2.y, P2.z) - triangle_intr);
 
                     interval::intr3 h_intr = interval::normalize(wi_intr + wo_intr);
-                    interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.m_index].normalBounds[i]);
+                    interval::intr3 normal_intr = toIntr3(mirrorPolygonSoup.internalsNormalBound[currentNode.m_index].normalBounds[i]);
 
                     if (interval::intersects(h_intr, normal_intr, 1.0e-8f /* eps */) ||
                         interval::intersects(-h_intr, normal_intr, 1.0e-8f /* eps */))
                     {
-                        stack.push(builder.m_internals[currentNode.m_index].children[i]);
+                        stack.push(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].children[i]);
                     }
                 }
             }
