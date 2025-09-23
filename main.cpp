@@ -7,6 +7,8 @@
 #include "helper_math.h"
 #include "minimum_lbvh.h"
 #include "saka.h"
+#include "sen.h"
+#include "sobol.h"
 
 inline glm::vec3 to(float3 p)
 {
@@ -56,6 +58,44 @@ inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
         {aabb.lower.y, aabb.upper.y},
         {aabb.lower.z, aabb.upper.z}
     };
+}
+
+const float ADAM_BETA1 = 0.9f;
+const float ADAM_BETA2 = 0.99f;
+
+struct Adam
+{
+    float m_m;
+    float m_v;
+
+    float optimize(float value, float g, float alpha, float beta1t, float beta2t)
+    {
+        float s = alpha;
+        float m = ADAM_BETA1 * m_m + (1.0f - ADAM_BETA1) * g;
+        float v = ADAM_BETA2 * m_v + (1.0f - ADAM_BETA2) * g * g;
+        m_m = m;
+        m_v = v;
+        float m_hat = m / (1.0f - beta1t);
+        float v_hat = v / (1.0f - beta2t);
+
+        const float ADAM_E = 1.0e-15f;
+        return value - s * m_hat / (sqrt(v_hat) + ADAM_E);
+    }
+};
+
+inline float2 square2triangle(float2 square)
+{ 
+    if (square.y > square.x) 
+    {
+        square.x *= 0.5f; 
+        square.y -= square.x;
+    } 
+    else 
+    {
+        square.y *= 0.5f;
+        square.x -= square.y;
+    }
+    return square;
 }
 
 enum class Material
@@ -629,7 +669,10 @@ int main() {
 #if 1
         static float3 vs[3] = {
             {2.3f, 1.0f, -1.0f},
-            {0.0f, 1.0f, -0.3f},
+            
+            //{0.0f, 1.0f, -0.3f},
+            {-0.539949894f, 1.0f, -0.342208207f },
+
             {1.1f, 1.0f, 1.6f},
         };
 
@@ -642,7 +685,8 @@ int main() {
             DrawLine(to(vs[i]), to(vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
         }
 
-        static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
+        // static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
+        static glm::vec3 P0 = { 0.313918f, 1.19825f, -0.302908f };
         ManipulatePosition(camera, &P0, 0.3f);
 
         static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
@@ -651,38 +695,170 @@ int main() {
         DrawText(P0, "P0");
         DrawText(P2, "P2");
 
-        float param_a = 0.3f;
-        float param_b = 0.3f;
-
-        for (int iter = 0; iter < 30; iter++)
+        // visualize cost function
+        if (0)
         {
+            PCG rng;
+
             float3 e0 = vs[1] - vs[0];
             float3 e1 = vs[2] - vs[0];
-            float3 P1 = vs[0] + e0 * param_a + e1 * param_b;
-
-            DrawLine(P0, to(P1), { 255, 0, 0 }, 2);
-            DrawLine(to(P1), P2, { 255, 0, 0 }, 2);
-            DrawPoint(to(P1), { 255, 255, 255 }, 4);
-        
-            float dparams[2] = {};
-
-            for (int i = 0; i < 2; i++)
+            for (int i = 0; i < 10000; i++)
             {
-                saka::dval params[2] = { param_a, param_b };
-                params[i].requires_grad();
+                float2 params = {};
+                sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, i, 123, 456, 789);
+                params = square2triangle(params);
 
-                saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
+                saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params.x + saka::make_dval3(e1) * params.y;
                 saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
                 saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
-                saka::dval3 ht = saka::normalize(refraction_normal(wi, wo, 1.3f));
+                saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                 saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
-                saka::dval3 c = n - ht;
-                dparams[i] = dot(c, c).g;
-            }
 
-            float lr = 0.005f;
-            param_a = param_a - dparams[0] * lr;
-            param_b = param_b - dparams[1] * lr;
+                auto crs = cross(n, ht) / 3.0f;;
+                float len2 = clamp(dot(crs, crs).v, 0.0f, 1.0f);
+
+                float r = len2 * 255.0f;
+                float g = len2 * 255.0f;
+                float b = len2 * 255.0f;
+                DrawPoint({ P1.x.v, P1.y.v, P1.z.v }, { r, g, b }, 3);
+
+                //float nL = len2 * 0.8f;
+                //DrawLine({ P1.x.v, P1.y.v, P1.z.v }, { P1.x.v + n.x.v * nL, P1.y.v + n.y.v * nL, P1.z.v + n.z.v * nL }, { r, g, b }, 3);
+            }
+        }
+
+        static float param_a_init = 0.3f;
+        static float param_b_init = 0.3f;
+        if(0)
+        {
+            float param_a = param_a_init;
+            float param_b = param_b_init;
+
+            float beta1t = 1.0f;
+            float beta2t = 1.0f;
+            Adam adams[2] = {};
+
+            int N_iter = 100;
+            for (int iter = 0; iter < N_iter; iter++)
+            {
+                float3 e0 = vs[1] - vs[0];
+                float3 e1 = vs[2] - vs[0];
+                float3 P1 = vs[0] + e0 * param_a + e1 * param_b;
+
+                if (iter == N_iter - 1)
+                {
+                    DrawLine(P0, to(P1), { 255, 0, 0 }, 2);
+                    DrawLine(to(P1), P2, { 255, 0, 0 }, 2);
+                }
+                else
+                {
+                    DrawLine(P0, to(P1), { 64, 64, 64 }, 1);
+                    DrawLine(to(P1), P2, { 64, 64, 64 }, 1);
+                }
+                DrawPoint(to(P1), { 255, 255, 255 }, 4);
+
+                float dparams[2] = {};
+
+                for (int i = 0; i < 2; i++)
+                {
+                    saka::dval params[2] = { param_a, param_b };
+                    params[i].requires_grad();
+
+                    saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
+                    saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
+                    saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
+                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
+
+                    saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
+                    saka::dval3 c = saka::cross(n, ht);
+                    dparams[i] = dot(c, c).g;
+                }
+
+                //float lr = 0.004f;
+                //param_a = param_a - dparams[0] * lr;
+                //param_b = param_b - dparams[1] * lr;
+                float lr = 0.02f;
+                beta1t *= ADAM_BETA1;
+                beta2t *= ADAM_BETA2;
+                param_a = adams[0].optimize(param_a, dparams[0], lr, beta1t, beta2t);
+                param_b = adams[1].optimize(param_b, dparams[1], lr, beta1t, beta2t);
+            }
+        }
+
+
+        if(1)
+        {
+            float param_a = param_a_init;
+            float param_b = param_b_init;
+
+            int sobolItr = 0;
+            int N_iter = 300;
+            for (int iter = 0; iter < N_iter; iter++)
+            {
+                float3 e0 = vs[1] - vs[0];
+                float3 e1 = vs[2] - vs[0];
+                float3 P1 = vs[0] + e0 * param_a + e1 * param_b;
+
+                if (iter == N_iter - 1)
+                {
+                    DrawLine(P0, to(P1), { 255, 0, 0 }, 2);
+                    DrawLine(to(P1), P2, { 255, 0, 0 }, 2);
+                }
+                else
+                {
+                    DrawLine(P0, to(P1), { 64, 64, 64 }, 1);
+                    DrawLine(to(P1), P2, { 64, 64, 64 }, 1);
+                }
+
+                DrawPoint(to(P1), { 255, 255, 255 }, 4);
+                DrawText(to(P1), std::to_string(iter));
+
+                sen::Mat<3, 2> A;
+                sen::Mat<3, 1> b;
+
+                for (int i = 0; i < 2; i++)
+                {
+                    saka::dval params[2] = { param_a, param_b };
+                    params[i].requires_grad();
+
+                    saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
+                    saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
+                    saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
+                    saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
+
+                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
+
+                    saka::dval3 c = cross(n, ht);
+
+                    A(0, i) = c.x.g;
+                    A(1, i) = c.y.g;
+                    A(2, i) = c.z.g;
+
+                    b(0, 0) = c.x.v;
+                    b(1, 0) = c.y.v;
+                    b(2, 0) = c.z.v;
+                }
+                
+                sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
+
+                bool largeStep = 0.25f < fabs(dparams(0, 0)) || 0.25f < fabs(dparams(1, 0));
+                if (largeStep)
+                {
+                    float2 sobolXY;
+                    sobol::shuffled_scrambled_sobol_2d(&sobolXY.x, &sobolXY.y, sobolItr++, 123, 456, 789);
+                    sobolXY = square2triangle(sobolXY);
+                    param_a = sobolXY.x;
+                    param_b = sobolXY.y;
+                }
+                else
+                {
+                    param_a = param_a - dparams(0, 0);
+                    param_b = param_b - dparams(1, 0);
+                }
+
+                param_a = clamp(param_a, 0.0f, 1.0f);
+                param_b = clamp(param_b, 0.0f, 1.0f);
+            }
         }
 #endif
 
@@ -824,6 +1000,8 @@ int main() {
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
 
+        ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
+        ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))
         //{
         //    param_a = 0.3f;
