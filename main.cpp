@@ -689,7 +689,8 @@ int main() {
         static glm::vec3 P0 = { 0.313918f, 1.19825f, -0.302908f };
         ManipulatePosition(camera, &P0, 0.3f);
 
-        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
+        // static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
+        static glm::vec3 P2 = { -0.3f, 1.2f, 0.0f }; // reflection
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
@@ -824,10 +825,12 @@ int main() {
                     saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
                     saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
                     saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
-                    saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
-
                     saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
 
+                    //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
+                    //saka::dval3 c = cross(n, ht);
+
+                    saka::dval3 ht = wi + wo;
                     saka::dval3 c = cross(n, ht);
 
                     A(0, i) = c.x.g;
