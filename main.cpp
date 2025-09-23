@@ -6,6 +6,7 @@
 #include "interval.h"
 #include "helper_math.h"
 #include "minimum_lbvh.h"
+#include "saka.h"
 
 inline glm::vec3 to(float3 p)
 {
@@ -37,6 +38,16 @@ inline float3 refraction(float3 wi /* normalized */, float3 n /* normalized */, 
     float k = eta * eta - dot(crs, crs);
     return -wi + (dot(wi, n) - sqrtf(k)) * n;
 }
+
+inline float3 refraction_normal(float3 wi /*normalized*/, float3 wo /*normallized*/, float eta /* = eta_t / eta_i */)
+{
+    return -(wi + wo * eta);
+}
+inline saka::dval3 refraction_normal(saka::dval3 wi /*normalized*/, saka::dval3 wo /*normallized*/, float eta /* = eta_t / eta_i */)
+{
+    return -(wi + wo * eta);
+}
+
 
 inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
 {
@@ -490,7 +501,8 @@ int main() {
 
         DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
 
-        float3 ht = -(wi + wo * eta);
+        //float3 ht = -(wi + wo * eta);
+        float3 ht = refraction_normal(wi, wo, eta);
 
         DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
 #endif
@@ -614,10 +626,68 @@ int main() {
         }
 #endif 
 
+#if 1
+        static float3 vs[3] = {
+            {2.3f, 1.0f, -1.0f},
+            {0.0f, 1.0f, -0.3f},
+            {1.1f, 1.0f, 1.6f},
+        };
 
+        for (int i = 0; i < 3; i++)
+        {
+            ManipulatePosition(camera, (glm::vec3*)&vs[i], 0.3f);
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            DrawLine(to(vs[i]), to(vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
+        }
+
+        static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
+        ManipulatePosition(camera, &P0, 0.3f);
+
+        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
+        ManipulatePosition(camera, &P2, 0.3f);
+
+        DrawText(P0, "P0");
+        DrawText(P2, "P2");
+
+        float param_a = 0.3f;
+        float param_b = 0.3f;
+
+        for (int iter = 0; iter < 30; iter++)
+        {
+            float3 e0 = vs[1] - vs[0];
+            float3 e1 = vs[2] - vs[0];
+            float3 P1 = vs[0] + e0 * param_a + e1 * param_b;
+
+            DrawLine(P0, to(P1), { 255, 0, 0 }, 2);
+            DrawLine(to(P1), P2, { 255, 0, 0 }, 2);
+            DrawPoint(to(P1), { 255, 255, 255 }, 4);
+        
+            float dparams[2] = {};
+
+            for (int i = 0; i < 2; i++)
+            {
+                saka::dval params[2] = { param_a, param_b };
+                params[i].requires_grad();
+
+                saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
+                saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
+                saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
+                saka::dval3 ht = saka::normalize(refraction_normal(wi, wo, 1.3f));
+                saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
+                saka::dval3 c = n - ht;
+                dparams[i] = dot(c, c).g;
+            }
+
+            float lr = 0.005f;
+            param_a = param_a - dparams[0] * lr;
+            param_b = param_b - dparams[1] * lr;
+        }
+#endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -753,6 +823,12 @@ int main() {
         ImGui::SetNextWindowSize({ 500, 800 }, ImGuiCond_Once);
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
+
+        //if (ImGui::Button("restart"))
+        //{
+        //    param_a = 0.3f;
+        //    param_b = 0.3f;
+        //}
 
         ImGui::End();
 
