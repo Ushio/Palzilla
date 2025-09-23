@@ -666,7 +666,7 @@ int main() {
         }
 #endif 
 
-#if 1
+#if 0
         static float3 vs[3] = {
             {2.3f, 1.0f, -1.0f},
             
@@ -866,7 +866,7 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -936,26 +936,116 @@ int main() {
                     {
                         minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[currentNode.m_index];
 
-                        float3 normal = minimum_lbvh::normalOf(tri);
-                        float3 m = mirror(p, normal, tri.vs[0]);
-                        float3 rd = make_float3(p_light.x, p_light.y, p_light.z) - m;
-                        float t;
-                        float u, v;
-                        float3 ng_triangle;
-                        if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng_triangle, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+                        // float3 normal = minimum_lbvh::normalOf(tri);
+                        TriangleAttrib attrib = mirrorPolygonSoup.triangleAttribs[currentNode.m_index];
+
+                        float param_a = 1.0f / 3.0f;
+                        float param_b = 1.0f / 3.0f;
+
+                        float3 e0 = tri.vs[1] - tri.vs[0];
+                        float3 e1 = tri.vs[2] - tri.vs[0];
+                        float3 en0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
+                        float3 en1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
+
+                        bool converged = false;
+                        int sobolItr = 0;
+                        int N_iter = 64;
+                        for (int iter = 0; iter < N_iter; iter++)
                         {
-                            float3 hitP = m + t * rd;
+                            float3 P1 = tri.vs[0] + e0 * param_a + e1 * param_b;
+
+                            sen::Mat<3, 2> A;
+                            sen::Mat<3, 1> b;
+
+                            for (int i = 0; i < 2; i++)
+                            {
+                                saka::dval params[2] = { param_a, param_b };
+                                params[i].requires_grad();
+
+                                saka::dval3 P1 = saka::make_dval3(tri.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
+                                saka::dval3 wi = saka::normalize(saka::make_dval3(p) - P1);
+                                saka::dval3 wo = saka::normalize(saka::make_dval3(p_light) - P1);
+                                saka::dval3 n = saka::make_dval3(attrib.shadingNormals[0]) + saka::make_dval3(en0) * params[0] + saka::make_dval3(en1) * params[1];
+
+                                //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
+                                //saka::dval3 c = cross(n, ht);
+
+                                saka::dval3 ht = wi + wo;
+                                saka::dval3 c = cross(n, ht);
+
+                                A(0, i) = c.x.g;
+                                A(1, i) = c.y.g;
+                                A(2, i) = c.z.g;
+
+                                b(0, 0) = c.x.v;
+                                b(1, 0) = c.y.v;
+                                b(2, 0) = c.z.v;
+                            }
+
+                            if (fabsf(b(0, 0)) < 0.00001f && fabsf(b(1, 0)) < 0.00001f && fabsf(b(2, 0)) < 0.00001f)
+                            {
+                                converged = true;
+                                break;
+                            }
+
+                            sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
+
+                            bool largeStep = 0.25f < fabs(dparams(0, 0)) || 0.25f < fabs(dparams(1, 0));
+                            if (largeStep)
+                            {
+                                float2 sobolXY;
+                                sobol::shuffled_scrambled_sobol_2d(&sobolXY.x, &sobolXY.y, sobolItr++, 123, 456, 789);
+                                sobolXY = square2triangle(sobolXY);
+                                param_a = sobolXY.x;
+                                param_b = sobolXY.y;
+                            }
+                            else
+                            {
+                                param_a = param_a - dparams(0, 0);
+                                param_b = param_b - dparams(1, 0);
+                            }
+
+                            param_a = clamp(param_a, 0.0f, 1.0f);
+                            param_b = clamp(param_b, 0.0f, 1.0f);
+                        }
+
+                        if(converged && 0.0f <= param_a && 0.0f <= param_b && param_a + param_b < 1.0f )
+                        {
+                            float3 hitP = tri.vs[0] + e0 * param_a + e1 * param_b;
+                            float3 hitN = attrib.shadingNormals[0] + en0 * param_a + en1 * param_b;
 
                             bool invisible =
-                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, hitP, normalize(ng_triangle)) ||
-                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, hitP, normalize(ng_triangle), to(p_light), { 0, 0, 0 });
+                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, hitP, normalize(hitN)) ||
+                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, hitP, normalize(hitN), to(p_light), { 0, 0, 0 });
 
                             if (!invisible)
                             {
-                                float d2 = dot(rd, rd);
+                                float3 d0to1 = hitP - p;
+                                float3 d1to2 = to(p_light) - hitP;
+                                float d2 = sqrt(dot(d0to1, d0to1)) + sqrt(dot(d1to2, d1to2));
                                 L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(hitP - p), n), 0.0f);
                             }
                         }
+
+                        //float3 m = mirror(p, normal, tri.vs[0]);
+                        //float3 rd = make_float3(p_light.x, p_light.y, p_light.z) - m;
+                        //float t;
+                        //float u, v;
+                        //float3 ng_triangle;
+                        //if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng_triangle, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+                        //{
+                        //    float3 hitP = m + t * rd;
+
+                        //    bool invisible =
+                        //        occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, hitP, normalize(ng_triangle)) ||
+                        //        occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, hitP, normalize(ng_triangle), to(p_light), { 0, 0, 0 });
+
+                        //    if (!invisible)
+                        //    {
+                        //        float d2 = dot(rd, rd);
+                        //        L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(hitP - p), n), 0.0f);
+                        //    }
+                        //}
                     }
                     else
                     {
@@ -1003,8 +1093,8 @@ int main() {
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
 
-        ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
-        ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
+        //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
+        //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))
         //{
         //    param_a = 0.3f;
