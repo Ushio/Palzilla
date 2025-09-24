@@ -666,7 +666,7 @@ int main() {
         }
 #endif 
 
-#if 0
+#if 1
         static float3 vs[3] = {
             {2.3f, 1.0f, -1.0f},
             
@@ -689,15 +689,15 @@ int main() {
         static glm::vec3 P0 = { 0.313918f, 1.19825f, -0.302908f };
         ManipulatePosition(camera, &P0, 0.3f);
 
-        // static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
-        static glm::vec3 P2 = { -0.3f, 1.2f, 0.0f }; // reflection
+        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
+        // static glm::vec3 P2 = { -0.3f, 1.2f, 0.0f }; // reflection
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
         DrawText(P2, "P2");
 
         // visualize cost function
-        if (0)
+        if (1)
         {
             PCG rng;
 
@@ -715,16 +715,31 @@ int main() {
                 saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                 saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
 
-                auto crs = cross(n, ht) / 3.0f;;
-                float len2 = clamp(dot(crs, crs).v, 0.0f, 1.0f);
+               
+                //saka::dval3 c = normalize(ht) - n;
+                //float len2 = dot(c, c).v /4.0f;
+                //glm::vec3 color = viridis(len2);
+// 
+                //auto len = dot(n, cross(wi, wo));
+                //auto crs = cross(n, ht) / 3.0f;
+                //float len2 = clamp( fabsf(len.v), 0.0f, 1.0f);
+                //glm::vec3 color = viridis(len2);
 
-                float r = len2 * 255.0f;
-                float g = len2 * 255.0f;
-                float b = len2 * 255.0f;
+                float eta = 1.3f;
+                // saka::dval3 c = cross(n, wo) * eta + cross(n, wi);
+                saka::dval3 c = cross(n, wo * eta + wi);
+
+                float len2 = dot(c, c).v / 16;
+                glm::vec3 color = viridis(len2);
+
+                float r = color.x * 255.0f;
+                float g = color.y * 255.0f;
+                float b = color.z * 255.0f;
                 DrawPoint({ P1.x.v, P1.y.v, P1.z.v }, { r, g, b }, 3);
 
-                //float nL = len2 * 0.8f;
-                //DrawLine({ P1.x.v, P1.y.v, P1.z.v }, { P1.x.v + n.x.v * nL, P1.y.v + n.y.v * nL, P1.z.v + n.z.v * nL }, { r, g, b }, 3);
+                float nL = len2 * 0.8f;
+                // DrawLine({ P1.x.v, P1.y.v, P1.z.v }, { P1.x.v + n.x.v * nL, P1.y.v + n.y.v * nL, P1.z.v + n.z.v * nL }, { r, g, b }, 3);
+                DrawPoint({ P1.x.v + n.x.v * nL, P1.y.v + n.y.v * nL, P1.z.v + n.z.v * nL }, { r, g, b }, 3);
             }
         }
 
@@ -770,8 +785,11 @@ int main() {
                     saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
                     saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
 
-                    saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
-                    saka::dval3 c = saka::cross(n, ht);
+                    //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
+                    //saka::dval3 c = saka::cross(n, ht);
+
+                    saka::dval3 c = cross(n, wo * 1.3f + wi);
+
                     dparams[i] = dot(c, c).g;
                 }
 
@@ -789,8 +807,13 @@ int main() {
 
         if(1)
         {
+            PCG rng;
+
             float param_a = param_a_init;
             float param_b = param_b_init;
+
+            float curCost = 10.0f;
+            float alpha = 1.0f;
 
             int sobolItr = 0;
             int N_iter = 300;
@@ -817,6 +840,7 @@ int main() {
                 sen::Mat<3, 2> A;
                 sen::Mat<3, 1> b;
 
+                float newCost;
                 for (int i = 0; i < 2; i++)
                 {
                     saka::dval params[2] = { param_a, param_b };
@@ -830,8 +854,10 @@ int main() {
                     //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                     //saka::dval3 c = cross(n, ht);
 
-                    saka::dval3 ht = wi + wo;
-                    saka::dval3 c = cross(n, ht);
+                    //saka::dval3 ht = wi + wo;
+                    //saka::dval3 c = cross(n, ht);
+
+                    saka::dval3 c = cross(n, wo * 1.3f + wi);
 
                     A(0, i) = c.x.g;
                     A(1, i) = c.y.g;
@@ -840,33 +866,40 @@ int main() {
                     b(0, 0) = c.x.v;
                     b(1, 0) = c.y.v;
                     b(2, 0) = c.z.v;
+
+                    newCost = dot(c, c).v;
                 }
                 
                 sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
 
-                bool largeStep = 0.25f < fabs(dparams(0, 0)) || 0.25f < fabs(dparams(1, 0));
-                if (largeStep)
+                if( newCost < curCost )
                 {
-                    float2 sobolXY;
-                    sobol::shuffled_scrambled_sobol_2d(&sobolXY.x, &sobolXY.y, sobolItr++, 123, 456, 789);
-                    sobolXY = square2triangle(sobolXY);
-                    param_a = sobolXY.x;
-                    param_b = sobolXY.y;
+                    alpha = fminf(alpha * 2.0f, 1.0f);
                 }
                 else
                 {
-                    param_a = param_a - dparams(0, 0);
-                    param_b = param_b - dparams(1, 0);
+                    alpha = fmaxf(alpha * 0.5f, 1.0f / 256.0f);
                 }
+                curCost = newCost;
 
-                param_a = clamp(param_a, 0.0f, 1.0f);
-                param_b = clamp(param_b, 0.0f, 1.0f);
+                float movement = sqrtf(dparams(0, 0) * dparams(0, 0) + dparams(1, 0) * dparams(1, 0));
+                float maxStep = 0.25f;
+                float clampScale = movement < maxStep ? 1.0f : maxStep / movement;
+
+                param_a = param_a - alpha * dparams(0, 0) * clampScale;
+                param_b = param_b - alpha * dparams(1, 0) * clampScale;
+
+                //param_a = clamp(param_a, 0.0f, 1.0f);
+                //param_b = clamp(param_b, 0.0f, 1.0f);
+
+                // param_a = param_a - clamp( dparams(0, 0), -0.25f, 0.25f );
+                // param_b = param_b - clamp( dparams(1, 0), -0.25f, 0.25f );
             }
         }
 #endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1093,8 +1126,8 @@ int main() {
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
 
-        //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
-        //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
+        ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
+        ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))
         //{
         //    param_a = 0.3f;
