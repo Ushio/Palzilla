@@ -689,8 +689,8 @@ int main() {
         static glm::vec3 P0 = { 0.313918f, 1.19825f, -0.302908f };
         ManipulatePosition(camera, &P0, 0.3f);
 
-        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
-        // static glm::vec3 P2 = { -0.3f, 1.2f, 0.0f }; // reflection
+        // static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
+        static glm::vec3 P2 = { -0.3f, 1.2f, 0.0f }; // reflection
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
@@ -716,19 +716,16 @@ int main() {
                 saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
 
                
-                //saka::dval3 c = normalize(ht) - n;
-                //float len2 = dot(c, c).v /4.0f;
-                //glm::vec3 color = viridis(len2);
-// 
-                //auto len = dot(n, cross(wi, wo));
-                //auto crs = cross(n, ht) / 3.0f;
-                //float len2 = clamp( fabsf(len.v), 0.0f, 1.0f);
+
+
+                // refraction 
+                //float eta = 1.3f;
+                //saka::dval3 c = cross(n, wo * eta + wi);
+                //float len2 = dot(c, c).v / 16;
                 //glm::vec3 color = viridis(len2);
 
-                float eta = 1.3f;
-                // saka::dval3 c = cross(n, wo) * eta + cross(n, wi);
-                saka::dval3 c = cross(n, wo * eta + wi);
-
+                // reflection
+                saka::dval3 c = cross(n, wo + wi);
                 float len2 = dot(c, c).v / 16;
                 glm::vec3 color = viridis(len2);
 
@@ -738,7 +735,6 @@ int main() {
                 DrawPoint({ P1.x.v, P1.y.v, P1.z.v }, { r, g, b }, 3);
 
                 float nL = len2 * 0.8f;
-                // DrawLine({ P1.x.v, P1.y.v, P1.z.v }, { P1.x.v + n.x.v * nL, P1.y.v + n.y.v * nL, P1.z.v + n.z.v * nL }, { r, g, b }, 3);
                 DrawPoint({ P1.x.v + n.x.v * nL, P1.y.v + n.y.v * nL, P1.z.v + n.z.v * nL }, { r, g, b }, 3);
             }
         }
@@ -857,7 +853,11 @@ int main() {
                     //saka::dval3 ht = wi + wo;
                     //saka::dval3 c = cross(n, ht);
 
-                    saka::dval3 c = cross(n, wo * 1.3f + wi);
+                    // refraction
+                    // saka::dval3 c = cross(n, wo * 1.3f + wi);
+
+                    // reflection
+                    saka::dval3 c = cross(n, wo + wi);
 
                     A(0, i) = c.x.g;
                     A(1, i) = c.y.g;
