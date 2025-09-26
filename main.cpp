@@ -666,7 +666,7 @@ int main() {
         }
 #endif 
 
-#if 1
+#if 0
         static float3 vs[3] = {
             {2.3f, 1.0f, -1.0f},
             
@@ -899,7 +899,7 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -981,7 +981,9 @@ int main() {
                         float3 en1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
 
                         bool converged = false;
-                        int sobolItr = 0;
+                        float alpha = 1.0f;
+                        float curCost = 10.0f;
+
                         int N_iter = 64;
                         for (int iter = 0; iter < N_iter; iter++)
                         {
@@ -989,6 +991,8 @@ int main() {
 
                             sen::Mat<3, 2> A;
                             sen::Mat<3, 1> b;
+
+                            float newCost = 0.0f;
 
                             for (int i = 0; i < 2; i++)
                             {
@@ -1005,6 +1009,7 @@ int main() {
 
                                 saka::dval3 ht = wi + wo;
                                 saka::dval3 c = cross(n, ht);
+                                newCost = dot(c, c).v;
 
                                 A(0, i) = c.x.g;
                                 A(1, i) = c.y.g;
@@ -1015,7 +1020,7 @@ int main() {
                                 b(2, 0) = c.z.v;
                             }
 
-                            if (fabsf(b(0, 0)) < 0.00001f && fabsf(b(1, 0)) < 0.00001f && fabsf(b(2, 0)) < 0.00001f)
+                            if (newCost < 1.0e-10f)
                             {
                                 converged = true;
                                 break;
@@ -1023,23 +1028,22 @@ int main() {
 
                             sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
 
-                            bool largeStep = 0.25f < fabs(dparams(0, 0)) || 0.25f < fabs(dparams(1, 0));
-                            if (largeStep)
+                            if (newCost < curCost)
                             {
-                                float2 sobolXY;
-                                sobol::shuffled_scrambled_sobol_2d(&sobolXY.x, &sobolXY.y, sobolItr++, 123, 456, 789);
-                                sobolXY = square2triangle(sobolXY);
-                                param_a = sobolXY.x;
-                                param_b = sobolXY.y;
+                                alpha = fminf(alpha * (4.0f / 3.0f), 1.0f);
                             }
                             else
                             {
-                                param_a = param_a - dparams(0, 0);
-                                param_b = param_b - dparams(1, 0);
+                                alpha = fmaxf(alpha * (1.0f / 3.0f), 1.0f / 32.0f);
                             }
+                            curCost = newCost;
 
-                            param_a = clamp(param_a, 0.0f, 1.0f);
-                            param_b = clamp(param_b, 0.0f, 1.0f);
+                            float movement = sqrtf(dparams(0, 0) * dparams(0, 0) + dparams(1, 0) * dparams(1, 0));
+                            float maxStep = 0.25f;
+                            float clampScale = fminf(1.0f, maxStep / movement);
+
+                            param_a = param_a - alpha * dparams(0, 0) * clampScale;
+                            param_b = param_b - alpha * dparams(1, 0) * clampScale;
                         }
 
                         if(converged && 0.0f <= param_a && 0.0f <= param_b && param_a + param_b < 1.0f )
@@ -1126,8 +1130,8 @@ int main() {
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
 
-        ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
-        ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
+        //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
+        //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))
         //{
         //    param_a = 0.3f;
