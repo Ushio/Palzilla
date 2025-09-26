@@ -690,7 +690,7 @@ int main() {
         ManipulatePosition(camera, &P0, 0.3f);
 
         // static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
-        static glm::vec3 P2 = { -0.3f, 1.2f, 0.0f }; // reflection
+        static glm::vec3 P2 = { -0.3f, 1.00517f, 0.0f }; // reflection
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
@@ -726,7 +726,7 @@ int main() {
 
                 // reflection
                 saka::dval3 c = cross(n, wo + wi);
-                float len2 = dot(c, c).v / 16;
+                float len2 = dot(c, c).v / 8;
                 glm::vec3 color = viridis(len2);
 
                 float r = color.x * 255.0f;
@@ -872,19 +872,19 @@ int main() {
                 
                 sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
 
-                if( newCost < curCost )
+                if ( newCost < curCost )
                 {
-                    alpha = fminf(alpha * 2.0f, 1.0f);
+                    alpha = fminf(alpha * (4.0f / 3.0f), 1.0f);
                 }
                 else
                 {
-                    alpha = fmaxf(alpha * 0.5f, 1.0f / 256.0f);
+                    alpha = fmaxf(alpha * (1.0f / 3.0f), 1.0f / 32.0f);
                 }
                 curCost = newCost;
 
                 float movement = sqrtf(dparams(0, 0) * dparams(0, 0) + dparams(1, 0) * dparams(1, 0));
                 float maxStep = 0.25f;
-                float clampScale = movement < maxStep ? 1.0f : maxStep / movement;
+                float clampScale = fminf(1.0f, maxStep / movement);
 
                 param_a = param_a - alpha * dparams(0, 0) * clampScale;
                 param_b = param_b - alpha * dparams(1, 0) * clampScale;
