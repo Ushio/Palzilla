@@ -10,6 +10,35 @@
 #include "sen.h"
 #include "sobol.h"
 
+inline void clamp_uv(float* u_inout, float* v_inout, minimum_lbvh::Triangle tri)
+{
+    float u = *u_inout;
+    float v = *v_inout;
+    float3 e0 = tri.vs[1] - tri.vs[0];
+    float3 e1 = tri.vs[2] - tri.vs[0];
+    float3 p = tri.vs[0] + e0 * u + e1 * v;
+    if (v < 0.0f)
+    {
+        u = dot(e0, p - tri.vs[0]) / dot(e0, e0);
+        u = clamp(u, 0.0f, 1.0f);
+        v = 0.0f;
+    }
+    if (u < 0.0f)
+    {
+        v = dot(e1, p - tri.vs[0]) / dot(e1, e1);
+        v = clamp(v, 0.0f, 1.0f);
+        u = 0.0f;
+    }
+    if (1.0f < u + v)
+    {
+        float t = 1.0 / (u + v);
+        u *= t;
+        v *= t;
+    }
+    *u_inout = u;
+    *v_inout = v;
+}
+
 inline glm::vec3 to(float3 p)
 {
     return { p.x, p.y, p.z };
@@ -677,13 +706,14 @@ int main() {
 
         static minimum_lbvh::Triangle tri0 = {
             float3 {2.3f, 1.0f, -1.0f},
-            float3 {-0.539949894f, 1.0f, -0.342208207f },
             float3 {1.1f, 1.0f, 1.6f},
+            float3 {-0.539949894f, 1.0f, -0.342208207f },
         };
 
         for (int i = 0; i < 3; i++)
         {
             ManipulatePosition(camera, (glm::vec3*)&tri0.vs[i], 0.3f);
+            DrawText(to(tri0.vs[i]), std::to_string(i));
         }
         for (int i = 0; i < 3; i++)
         {
@@ -719,9 +749,6 @@ int main() {
                 saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
                 saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                 saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
-
-               
-
 
                 // refraction 
                 //float eta = 1.3f;
@@ -808,15 +835,12 @@ int main() {
         // Single Event
         if(0)
         {
-            PCG rng;
-
             float param_a = param_a_init;
             float param_b = param_b_init;
 
             float curCost = 10.0f;
             float alpha = 1.0f;
 
-            int sobolItr = 0;
             int N_iter = 300;
             for (int iter = 0; iter < N_iter; iter++)
             {
@@ -896,9 +920,166 @@ int main() {
             }
         }
 
-        // 2 Events
+        if (1)
+        {
+            // 2 Events
+            static minimum_lbvh::Triangle tri1 = {
+                float3 {2.3f, 1.5f, -1.0f},
+                float3 {-0.539949894f, 1.5f, -0.342208207f },
+                float3 {1.1f, 1.5f, 1.6f},
+            };
 
+            for (int i = 0; i < 3; i++)
+            {
+                ManipulatePosition(camera, (glm::vec3*)&tri1.vs[i], 0.3f);
+                DrawText(to(tri1.vs[i]), std::to_string(i));
+            }
 
+            float3 n = minimum_lbvh::normalOf(tri1);
+
+            for (int i = 0; i < 3; i++)
+            {
+                DrawLine(to(tri1.vs[i]), to(tri1.vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
+            }
+
+            const int K = 2;
+            minimum_lbvh::Triangle admissibleTriangles[K] = { tri1, tri0 };
+            float indexOfRefractions[2] = {1.3f, 1.3f};
+
+            float3 P_beg = to(P0);
+            float3 P_end = to(P2);
+
+            const int nParameters = K * 2;
+            float parameters[nParameters];
+            for (int i = 0; i < nParameters; i++)
+            {
+                parameters[i] = 1.0f / 3.0f;
+            }
+
+            float curCosts[K];
+            float alphas[K];
+            for (int k = 0; k < K; k++)
+            {
+                curCosts[k] = 1.0e+15f;
+                alphas[k] = 1.0f;
+            }
+
+            int N_iter = 300;
+            for (int iter = 0; iter < N_iter; iter++)
+            {
+                sen::Mat<K * 3, K * 2> A;
+                sen::Mat<K * 3, 1> b;
+
+                float newCosts[K];
+                for (int k = 0; k < K; k++)
+                {
+                    newCosts[k] = 1.0e+15f;
+                }
+
+                for (int i = 0; i < nParameters; i++)
+                {
+                    saka::dval parameters_optimizable[nParameters];
+                    for (int j = 0; j < nParameters; j++)
+                    {
+                        parameters_optimizable[j] = parameters[j];
+                    }
+                    parameters_optimizable[i].requires_grad();
+
+                    saka::dval3 vertices[K + 2];
+                    vertices[0]     = saka::make_dval3(P_beg);
+                    vertices[K + 1] = saka::make_dval3(P_end);
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        saka::dval param_u = parameters_optimizable[k * 2 + 0];
+                        saka::dval param_v = parameters_optimizable[k * 2 + 1];
+
+                        minimum_lbvh::Triangle tri = admissibleTriangles[k];
+
+                        float3 e0 = tri.vs[1] - tri.vs[0];
+                        float3 e1 = tri.vs[2] - tri.vs[0];
+                        vertices[k + 1] = saka::make_dval3(tri.vs[0]) + saka::make_dval3(e0) * param_u + saka::make_dval3(e1) * param_v;
+                    }
+                    // debug draw
+                    if (i == 0)
+                    {
+                        for (int j = 0; j < K + 1; j++)
+                        {
+
+                            glm::vec3 a = { vertices[j].x.v, vertices[j].y.v, vertices[j].z.v };
+                            glm::vec3 b = { vertices[j + 1].x.v, vertices[j + 1].y.v, vertices[j + 1].z.v };
+                            if (iter == N_iter - 1)
+                            {
+                                DrawLine(a, b, { 255, 64, 64 }, 2);
+                            }
+                            else
+                            {
+                                DrawLine(a, b, { 64, 64, 64 }, 1);
+                            }
+                            DrawPoint(b, { 255, 255, 255 }, 4);
+                            DrawText(b, std::to_string(iter));
+                        }
+                    }
+
+                    for (int k = 0; k < K; k++)
+                    {
+                        saka::dval3 wi = saka::normalize(vertices[k]     - vertices[k + 1]);
+                        saka::dval3 wo = saka::normalize(vertices[k + 2] - vertices[k + 1]);
+                        saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(admissibleTriangles[k]));
+
+                        float eta = indexOfRefractions[k]; // eta_o / ita_i
+                        if (dot(wi, n).v < 0.0f)
+                        {
+                            eta = 1.0f / eta;
+                        }
+
+                        // refraction
+                        saka::dval3 c = cross(n, wo * eta + wi);
+
+                        // reflection
+                        // saka::dval3 c = cross(n, wo + wi);
+
+                        A(k * 3 + 0, i) = c.x.g;
+                        A(k * 3 + 1, i) = c.y.g;
+                        A(k * 3 + 2, i) = c.z.g;
+
+                        b(k * 3 + 0, 0) = c.x.v;
+                        b(k * 3 + 1, 0) = c.y.v;
+                        b(k * 3 + 2, 0) = c.z.v;
+
+                        newCosts[k] = dot(c, c).v;
+                    }
+                }
+
+                sen::Mat<K * 2, 1> dparams = sen::solve_qr_overdetermined(A, b);
+                // naive
+                //for (int i = 0; i < nParameters; i++)
+                //{
+                //    parameters[i] = parameters[i] - dparams(i, 0);
+                //}
+                for (int k = 0; k < K; k++)
+                {
+                    if (newCosts[k] < curCosts[k])
+                    {
+                        alphas[k] = fminf(alphas[k] * (4.0f / 3.0f), 1.0f);
+                    }
+                    else
+                    {
+                        alphas[k] = fmaxf(alphas[k] * (1.0f / 3.0f), 1.0f / 32.0f);
+                    }
+                    curCosts[k] = newCosts[k];
+
+                    float du = dparams(k * 2 + 0, 0);
+                    float dv = dparams(k * 2 + 1, 0);
+                    float movement = sqrtf(du * du + dv * dv);
+                    float maxStep = 0.25f;
+                    float clampScale = fminf(1.0f, maxStep / movement);
+
+                    parameters[k * 2 + 0] -= alphas[k] * du * clampScale;
+                    parameters[k * 2 + 1] -= alphas[k] * dv * clampScale;
+                }
+            }
+        }
 #endif
 
         // Rendering
