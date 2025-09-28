@@ -69,6 +69,27 @@ inline float3 refraction(float3 wi /* normalized */, float3 n /* normalized */, 
     float k = eta * eta - dot(crs, crs);
     return -wi + (dot(wi, n) - sqrtf(k)) * n;
 }
+inline float3 refraction2(float3 wi, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
+{
+    float3 crs = cross(wi, n);
+    float k = dot(wi, wi) * eta * eta - dot(crs, crs);
+    return -wi + (dot(wi, n) - sqrtf(k)) * n;
+}
+inline float3 refraction3(float3 wi, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
+{
+    float WIoN = dot(wi, n);
+    float k = dot(wi, wi) * ( eta * eta - 1.0f ) + WIoN * WIoN;
+    return -wi + (WIoN - sqrtf(k)) * n;
+}
+
+inline float3 refraction4(float3 wi, float3 n, float eta /* = eta_t / eta_i */)
+{
+    float NoN = dot(n, n);
+    float WIoN = dot(wi, n);
+    float WoW = dot(wi, wi);
+    float k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
+    return -wi * NoN + (WIoN - sqrtf(k)) * n;
+}
 
 inline float3 refraction_normal(float3 wi /*normalized*/, float3 wo /*normallized*/, float eta /* = eta_t / eta_i */)
 {
@@ -79,6 +100,24 @@ inline saka::dval3 refraction_normal(saka::dval3 wi /*normalized*/, saka::dval3 
     return -(wi + wo * eta);
 }
 
+inline saka::dval3 reflection(saka::dval3 wi, saka::dval3 n)
+{
+    return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
+}
+
+inline saka::dval3 refraction2(saka::dval3 wi, saka::dval3 n /* normalized */, float eta /* = eta_t / eta_i */)
+{
+    saka::dval3 crs = cross(wi, n);
+    saka::dval k = dot(wi, wi) * eta * eta - dot(crs, crs);
+    return -wi + n * (dot(wi, n) - saka::sqrt(k));
+}
+
+inline saka::dval3 refraction3(saka::dval3 wi, saka::dval3 n /* normalized */, float eta /* = eta_t / eta_i */)
+{
+    saka::dval WIoN = dot(wi, n);
+    saka::dval k = dot(wi, wi) * (eta * eta - 1.0f) + WIoN * WIoN;
+    return -wi + n * (WIoN - saka::sqrt(k));
+}
 
 inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
 {
@@ -544,7 +583,7 @@ int main() {
 
 #endif
 
-#if 0
+#if 1
         // refraction
         float margin = 0.0f;
 
@@ -555,6 +594,7 @@ int main() {
         ManipulatePosition(camera, &N, 0.3f);
 
         float3 wi = normalize(to(P0));
+        float3 wi_unnormalized = to(P0);
 
         DrawArrow({}, to(wi), 0.01f, { 255, 0, 0 });
         DrawArrow({}, N, 0.02f, { 0, 255, 255 });
@@ -566,8 +606,9 @@ int main() {
         DrawAABB(wi_range, { 255, 0, 0 }, 1);
 
         float eta = 1.3f;
-        float3 wo = normalize( refraction(wi, normalize(to(N)), 1.3f) );
-
+        // float3 wo = normalize(refraction(wi, normalize(to(N)), 1.3f));
+        float3 wo = normalize(refraction4(wi_unnormalized, to(N), 1.3f) );
+        
         DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
 
         //float3 ht = -(wi + wo * eta);
@@ -695,7 +736,7 @@ int main() {
         }
 #endif 
 
-#if 1
+#if 0
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -725,14 +766,14 @@ int main() {
         ManipulatePosition(camera, &P0, 0.3f);
 
         static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
-        // static glm::vec3 P2 = { -0.3f, 1.00517f, 0.0f }; // reflection
+        //  static glm::vec3 P2 = { -0.3f, 1.00517f, 0.0f }; // reflection
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
         DrawText(P2, "P2");
 
         // visualize cost function
-        if (0)
+        if (1)
         {
             PCG rng;
 
@@ -745,10 +786,13 @@ int main() {
                 params = square2triangle(params);
 
                 saka::dval3 P1 = saka::make_dval3(tri0.vs[0]) + saka::make_dval3(e0) * params.x + saka::make_dval3(e1) * params.y;
-                saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
-                saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
+                //saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
+                //saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
+                saka::dval3 wi = saka::make_dval3(P0) - P1;
+                saka::dval3 wo = saka::make_dval3(P2) - P1;
+
                 saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
-                saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
+                saka::dval3 n = -saka::make_dval3(minimum_lbvh::normalOf(tri0));
 
                 // refraction 
                 //float eta = 1.3f;
@@ -757,8 +801,18 @@ int main() {
                 //glm::vec3 color = viridis(len2);
 
                 // reflection
-                saka::dval3 c = cross(n, wo + wi);
-                float len2 = dot(c, c).v / 8;
+                //saka::dval3 c = cross(n, wo + wi);
+                //float len2 = dot(c, c).v / 8;
+                //glm::vec3 color = viridis(len2);
+
+                //saka::dval3 R = reflection(wi, n);
+                //saka::dval3 c = cross(R, wo);
+                //float len2 = dot(c, c).v / 16;
+                //glm::vec3 color = viridis(len2);
+
+                saka::dval3 R = refraction2(wi, n, 1.3f);
+                saka::dval3 c = cross(R, wo);
+                float len2 = dot(c, c).v / 16;
                 glm::vec3 color = viridis(len2);
 
                 float r = color.x * 255.0f;
@@ -833,7 +887,7 @@ int main() {
         }
 
         // Single Event
-        if(0)
+        if(1)
         {
             float param_a = param_a_init;
             float param_b = param_b_init;
@@ -872,9 +926,11 @@ int main() {
                     params[i].requires_grad();
 
                     saka::dval3 P1 = saka::make_dval3(tri0.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
-                    saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
-                    saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
-                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
+                    //saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
+                    //saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
+                    saka::dval3 wi = saka::make_dval3(P0) - P1;
+                    saka::dval3 wo = saka::make_dval3(P2) - P1;
+                    saka::dval3 n = -saka::make_dval3(minimum_lbvh::normalOf(tri0));
 
                     //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                     //saka::dval3 c = cross(n, ht);
@@ -883,10 +939,16 @@ int main() {
                     //saka::dval3 c = cross(n, ht);
 
                     // refraction
-                    saka::dval3 c = cross(n, wo * 1.3f + wi);
+                    // saka::dval3 c = cross(n, wo * 1.3f + wi);
 
                     // reflection
-                    // saka::dval3 c = cross(n, wo + wi);
+                    //saka::dval3 c = cross(n, wo + wi);
+
+                    //saka::dval3 R = reflection(wi, n);
+                    //saka::dval3 c = cross(R, wo);
+
+                    saka::dval3 R = refraction2(wi, n, 1.3f);
+                    saka::dval3 c = cross(R, wo);
 
                     A(0, i) = c.x.g;
                     A(1, i) = c.y.g;
@@ -911,16 +973,19 @@ int main() {
                 }
                 curCost = newCost;
 
-                float movement = sqrtf(dparams(0, 0) * dparams(0, 0) + dparams(1, 0) * dparams(1, 0));
-                float maxStep = 0.25f;
-                float clampScale = fminf(1.0f, maxStep / movement);
+                //float movement = sqrtf(dparams(0, 0) * dparams(0, 0) + dparams(1, 0) * dparams(1, 0));
+                //float maxStep = 0.25f;
+                //float clampScale = fminf(1.0f, maxStep / movement);
 
-                param_a = param_a - alpha * dparams(0, 0) * clampScale;
-                param_b = param_b - alpha * dparams(1, 0) * clampScale;
+                //param_a = param_a - alpha * dparams(0, 0) * clampScale;
+                //param_b = param_b - alpha * dparams(1, 0) * clampScale;
+
+                param_a = param_a - dparams(0, 0);
+                param_b = param_b - dparams(1, 0);
             }
         }
 
-        if (1)
+        if (0)
         {
             // 2 Events
             static minimum_lbvh::Triangle tri1 = {
