@@ -666,54 +666,59 @@ int main() {
         }
 #endif 
 
-#if 0
-        static float3 vs[3] = {
-            {2.3f, 1.0f, -1.0f},
-            
-            //{0.0f, 1.0f, -0.3f},
-            {-0.539949894f, 1.0f, -0.342208207f },
+#if 1
+        //static float3 vs[3] = {
+        //    {2.3f, 1.0f, -1.0f},
+        //    
+        //    {-0.539949894f, 1.0f, -0.342208207f },
 
-            {1.1f, 1.0f, 1.6f},
+        //    {1.1f, 1.0f, 1.6f},
+        //};
+
+        static minimum_lbvh::Triangle tri0 = {
+            float3 {2.3f, 1.0f, -1.0f},
+            float3 {-0.539949894f, 1.0f, -0.342208207f },
+            float3 {1.1f, 1.0f, 1.6f},
         };
 
         for (int i = 0; i < 3; i++)
         {
-            ManipulatePosition(camera, (glm::vec3*)&vs[i], 0.3f);
+            ManipulatePosition(camera, (glm::vec3*)&tri0.vs[i], 0.3f);
         }
         for (int i = 0; i < 3; i++)
         {
-            DrawLine(to(vs[i]), to(vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
+            DrawLine(to(tri0.vs[i]), to(tri0.vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
         }
 
-        // static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
-        static glm::vec3 P0 = { 0.313918f, 1.19825f, -0.302908f };
+        static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
+        // static glm::vec3 P0 = { 0.313918f, 1.19825f, -0.302908f };
         ManipulatePosition(camera, &P0, 0.3f);
 
-        // static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
-        static glm::vec3 P2 = { -0.3f, 1.00517f, 0.0f }; // reflection
+        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
+        // static glm::vec3 P2 = { -0.3f, 1.00517f, 0.0f }; // reflection
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
         DrawText(P2, "P2");
 
         // visualize cost function
-        if (1)
+        if (0)
         {
             PCG rng;
 
-            float3 e0 = vs[1] - vs[0];
-            float3 e1 = vs[2] - vs[0];
+            float3 e0 = tri0.vs[1] - tri0.vs[0];
+            float3 e1 = tri0.vs[2] - tri0.vs[0];
             for (int i = 0; i < 10000; i++)
             {
                 float2 params = {};
                 sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, i, 123, 456, 789);
                 params = square2triangle(params);
 
-                saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params.x + saka::make_dval3(e1) * params.y;
+                saka::dval3 P1 = saka::make_dval3(tri0.vs[0]) + saka::make_dval3(e0) * params.x + saka::make_dval3(e1) * params.y;
                 saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
                 saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
                 saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
-                saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
+                saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
 
                
 
@@ -753,9 +758,9 @@ int main() {
             int N_iter = 100;
             for (int iter = 0; iter < N_iter; iter++)
             {
-                float3 e0 = vs[1] - vs[0];
-                float3 e1 = vs[2] - vs[0];
-                float3 P1 = vs[0] + e0 * param_a + e1 * param_b;
+                float3 e0 = tri0.vs[1] - tri0.vs[0];
+                float3 e1 = tri0.vs[2] - tri0.vs[0];
+                float3 P1 = tri0.vs[0] + e0 * param_a + e1 * param_b;
 
                 if (iter == N_iter - 1)
                 {
@@ -776,10 +781,10 @@ int main() {
                     saka::dval params[2] = { param_a, param_b };
                     params[i].requires_grad();
 
-                    saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
+                    saka::dval3 P1 = saka::make_dval3(tri0.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
                     saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
                     saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
-                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
+                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
 
                     //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                     //saka::dval3 c = saka::cross(n, ht);
@@ -800,8 +805,8 @@ int main() {
             }
         }
 
-
-        if(1)
+        // Single Event
+        if(0)
         {
             PCG rng;
 
@@ -815,9 +820,9 @@ int main() {
             int N_iter = 300;
             for (int iter = 0; iter < N_iter; iter++)
             {
-                float3 e0 = vs[1] - vs[0];
-                float3 e1 = vs[2] - vs[0];
-                float3 P1 = vs[0] + e0 * param_a + e1 * param_b;
+                float3 e0 = tri0.vs[1] - tri0.vs[0];
+                float3 e1 = tri0.vs[2] - tri0.vs[0];
+                float3 P1 = tri0.vs[0] + e0 * param_a + e1 * param_b;
 
                 if (iter == N_iter - 1)
                 {
@@ -842,10 +847,10 @@ int main() {
                     saka::dval params[2] = { param_a, param_b };
                     params[i].requires_grad();
 
-                    saka::dval3 P1 = saka::make_dval3(vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
+                    saka::dval3 P1 = saka::make_dval3(tri0.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
                     saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
                     saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
-                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf({ vs[0], vs[1], vs[2] }));
+                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
 
                     //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                     //saka::dval3 c = cross(n, ht);
@@ -854,10 +859,10 @@ int main() {
                     //saka::dval3 c = cross(n, ht);
 
                     // refraction
-                    // saka::dval3 c = cross(n, wo * 1.3f + wi);
+                    saka::dval3 c = cross(n, wo * 1.3f + wi);
 
                     // reflection
-                    saka::dval3 c = cross(n, wo + wi);
+                    // saka::dval3 c = cross(n, wo + wi);
 
                     A(0, i) = c.x.g;
                     A(1, i) = c.y.g;
@@ -888,18 +893,16 @@ int main() {
 
                 param_a = param_a - alpha * dparams(0, 0) * clampScale;
                 param_b = param_b - alpha * dparams(1, 0) * clampScale;
-
-                //param_a = clamp(param_a, 0.0f, 1.0f);
-                //param_b = clamp(param_b, 0.0f, 1.0f);
-
-                // param_a = param_a - clamp( dparams(0, 0), -0.25f, 0.25f );
-                // param_b = param_b - clamp( dparams(1, 0), -0.25f, 0.25f );
             }
         }
+
+        // 2 Events
+
+
 #endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);

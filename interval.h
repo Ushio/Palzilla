@@ -124,6 +124,11 @@ namespace interval
     {
         return { x, y, z };
     }
+    template <class T>
+    inline intr3 make_intr3(T v)
+    {
+        return { v.x, v.y, v.z };
+    }
 
     inline intr3 operator-(intr3 a)
     {
@@ -161,14 +166,14 @@ namespace interval
         };
     }
 
-    inline intr3 operator*(intr3 a, float s)
-    {
-        return intr3{
-            a.x * s,
-            a.y * s,
-            a.z * s
-        };
-    }
+    //inline intr3 operator*(intr3 a, float s)
+    //{
+    //    return intr3{
+    //        a.x * s,
+    //        a.y * s,
+    //        a.z * s
+    //    };
+    //}
     inline intr3 operator*(intr3 a, intr s)
     {
         return intr3{
@@ -466,5 +471,13 @@ namespace interval
             return false;
         }
         return true;
+    }
+    inline intr3 cross(intr3 a, intr3 b)
+    {
+        return {
+            a.y * b.z - a.z * b.y,
+            a.z * b.x - a.x * b.z,
+            a.x * b.y - a.y * b.x
+        };
     }
 }
