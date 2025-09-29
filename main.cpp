@@ -743,7 +743,7 @@ int main() {
         }
 #endif 
 
-#if 1
+#if 0
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -1146,7 +1146,7 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1228,8 +1228,6 @@ int main() {
                         float3 en1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
 
                         bool converged = false;
-                        float alpha = 1.0f;
-                        float curCost = 10.0f;
 
                         int N_iter = 64;
                         for (int iter = 0; iter < N_iter; iter++)
@@ -1247,15 +1245,13 @@ int main() {
                                 params[i].requires_grad();
 
                                 saka::dval3 P1 = saka::make_dval3(tri.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
-                                saka::dval3 wi = saka::normalize(saka::make_dval3(p) - P1);
-                                saka::dval3 wo = saka::normalize(saka::make_dval3(p_light) - P1);
+                                saka::dval3 wi = saka::make_dval3(p) - P1;
+                                saka::dval3 wo = saka::make_dval3(p_light) - P1;
                                 saka::dval3 n = saka::make_dval3(attrib.shadingNormals[0]) + saka::make_dval3(en0) * params[0] + saka::make_dval3(en1) * params[1];
 
-                                //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
-                                //saka::dval3 c = cross(n, ht);
+                                saka::dval3 R = reflection(wi, n);
+                                saka::dval3 c = cross(wo, R);
 
-                                saka::dval3 ht = wi + wo;
-                                saka::dval3 c = cross(n, ht);
                                 newCost = dot(c, c).v;
 
                                 A(0, i) = c.x.g;
@@ -1274,23 +1270,8 @@ int main() {
                             }
 
                             sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
-
-                            if (newCost < curCost)
-                            {
-                                alpha = fminf(alpha * (4.0f / 3.0f), 1.0f);
-                            }
-                            else
-                            {
-                                alpha = fmaxf(alpha * (1.0f / 3.0f), 1.0f / 32.0f);
-                            }
-                            curCost = newCost;
-
-                            float movement = sqrtf(dparams(0, 0) * dparams(0, 0) + dparams(1, 0) * dparams(1, 0));
-                            float maxStep = 0.25f;
-                            float clampScale = fminf(1.0f, maxStep / movement);
-
-                            param_a = param_a - alpha * dparams(0, 0) * clampScale;
-                            param_b = param_b - alpha * dparams(1, 0) * clampScale;
+                            param_a = param_a - dparams(0, 0);
+                            param_b = param_b - dparams(1, 0);
                         }
 
                         if(converged && 0.0f <= param_a && 0.0f <= param_b && param_a + param_b < 1.0f )
