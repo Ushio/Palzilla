@@ -208,10 +208,13 @@ namespace minimum_lbvh
 	{
 		float3 vs[3];
 	};
-
+	MINIMUM_LBVH_DEVICE inline float3 unnormalizedNormalOf(const Triangle& tri)
+	{
+		return cross(tri.vs[1] - tri.vs[0], tri.vs[2] - tri.vs[0]);
+	}
 	MINIMUM_LBVH_DEVICE inline float3 normalOf(const Triangle& tri)
 	{
-		return normalize(cross(tri.vs[1] - tri.vs[0], tri.vs[2] - tri.vs[0]));
+		return normalize(unnormalizedNormalOf(tri));
 	}
 
 	struct AABB

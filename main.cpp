@@ -69,20 +69,20 @@ inline float3 refraction(float3 wi /* normalized */, float3 n /* normalized */, 
     float k = eta * eta - dot(crs, crs);
     return -wi + (dot(wi, n) - sqrtf(k)) * n;
 }
-inline float3 refraction2(float3 wi, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
-{
-    float3 crs = cross(wi, n);
-    float k = dot(wi, wi) * eta * eta - dot(crs, crs);
-    return -wi + (dot(wi, n) - sqrtf(k)) * n;
-}
-inline float3 refraction3(float3 wi, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
-{
-    float WIoN = dot(wi, n);
-    float k = dot(wi, wi) * ( eta * eta - 1.0f ) + WIoN * WIoN;
-    return -wi + (WIoN - sqrtf(k)) * n;
-}
+//inline float3 refraction2(float3 wi, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
+//{
+//    float3 crs = cross(wi, n);
+//    float k = dot(wi, wi) * eta * eta - dot(crs, crs);
+//    return -wi + (dot(wi, n) - sqrtf(k)) * n;
+//}
+//inline float3 refraction3(float3 wi, float3 n /* normalized */, float eta /* = eta_t / eta_i */)
+//{
+//    float WIoN = dot(wi, n);
+//    float k = dot(wi, wi) * ( eta * eta - 1.0f ) + WIoN * WIoN;
+//    return -wi + (WIoN - sqrtf(k)) * n;
+//}
 
-inline float3 refraction4(float3 wi, float3 n, float eta /* = eta_t / eta_i */)
+inline float3 refraction_norm_free(float3 wi, float3 n, float eta /* = eta_t / eta_i */)
 {
     float NoN = dot(n, n);
     float WIoN = dot(wi, n);
@@ -105,20 +105,27 @@ inline saka::dval3 reflection(saka::dval3 wi, saka::dval3 n)
     return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
 }
 
-inline saka::dval3 refraction2(saka::dval3 wi, saka::dval3 n /* normalized */, float eta /* = eta_t / eta_i */)
+//inline saka::dval3 refraction2(saka::dval3 wi, saka::dval3 n /* normalized */, float eta /* = eta_t / eta_i */)
+//{
+//    saka::dval3 crs = cross(wi, n);
+//    saka::dval k = dot(wi, wi) * eta * eta - dot(crs, crs);
+//    return -wi + n * (dot(wi, n) - saka::sqrt(k));
+//}
+//
+//inline saka::dval3 refraction3(saka::dval3 wi, saka::dval3 n /* normalized */, float eta /* = eta_t / eta_i */)
+//{
+//    saka::dval WIoN = dot(wi, n);
+//    saka::dval k = dot(wi, wi) * (eta * eta - 1.0f) + WIoN * WIoN;
+//    return -wi + n * (WIoN - saka::sqrt(k));
+//}
+inline saka::dval3 refraction_norm_free(saka::dval3 wi, saka::dval3 n, float eta /* = eta_t / eta_i */)
 {
-    saka::dval3 crs = cross(wi, n);
-    saka::dval k = dot(wi, wi) * eta * eta - dot(crs, crs);
-    return -wi + n * (dot(wi, n) - saka::sqrt(k));
-}
-
-inline saka::dval3 refraction3(saka::dval3 wi, saka::dval3 n /* normalized */, float eta /* = eta_t / eta_i */)
-{
+    saka::dval NoN = dot(n, n);
     saka::dval WIoN = dot(wi, n);
-    saka::dval k = dot(wi, wi) * (eta * eta - 1.0f) + WIoN * WIoN;
-    return -wi + n * (WIoN - saka::sqrt(k));
+    saka::dval WoW = dot(wi, wi);
+    saka::dval k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
+    return -wi * NoN + n * (WIoN - sqrt(k));
 }
-
 inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
 {
     return {
@@ -583,7 +590,7 @@ int main() {
 
 #endif
 
-#if 1
+#if 0
         // refraction
         float margin = 0.0f;
 
@@ -607,7 +614,7 @@ int main() {
 
         float eta = 1.3f;
         // float3 wo = normalize(refraction(wi, normalize(to(N)), 1.3f));
-        float3 wo = normalize(refraction4(wi_unnormalized, to(N), 1.3f) );
+        float3 wo = normalize(refraction_norm_free(wi_unnormalized, to(N), 1.3f) );
         
         DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
 
@@ -736,7 +743,7 @@ int main() {
         }
 #endif 
 
-#if 0
+#if 1
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -773,7 +780,7 @@ int main() {
         DrawText(P2, "P2");
 
         // visualize cost function
-        if (1)
+        if (0)
         {
             PCG rng;
 
@@ -792,7 +799,7 @@ int main() {
                 saka::dval3 wo = saka::make_dval3(P2) - P1;
 
                 saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
-                saka::dval3 n = -saka::make_dval3(minimum_lbvh::normalOf(tri0));
+                saka::dval3 n = -saka::make_dval3(minimum_lbvh::unnormalizedNormalOf(tri0));
 
                 // refraction 
                 //float eta = 1.3f;
@@ -810,9 +817,9 @@ int main() {
                 //float len2 = dot(c, c).v / 16;
                 //glm::vec3 color = viridis(len2);
 
-                saka::dval3 R = refraction2(wi, n, 1.3f);
+                saka::dval3 R = refraction_norm_free(wi, n, 1.3f);
                 saka::dval3 c = cross(R, wo);
-                float len2 = dot(c, c).v / 16;
+                float len2 = dot(c, c).v / 65536;
                 glm::vec3 color = viridis(len2);
 
                 float r = color.x * 255.0f;
@@ -863,14 +870,19 @@ int main() {
                     params[i].requires_grad();
 
                     saka::dval3 P1 = saka::make_dval3(tri0.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
-                    saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
-                    saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
-                    saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
+                    //saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
+                    //saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
+                    //saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(tri0));
 
                     //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                     //saka::dval3 c = saka::cross(n, ht);
 
-                    saka::dval3 c = cross(n, wo * 1.3f + wi);
+                    //saka::dval3 c = cross(n, wo * 1.3f + wi);
+
+                    saka::dval3 wi = saka::make_dval3(P0) - P1;
+                    saka::dval3 wo = saka::make_dval3(P2) - P1;
+                    saka::dval3 n = saka::make_dval3(-minimum_lbvh::unnormalizedNormalOf(tri0));
+                    saka::dval3 c = saka::cross(wo, refraction_norm_free(wi, n, 1.3f));
 
                     dparams[i] = dot(c, c).g;
                 }
@@ -887,7 +899,7 @@ int main() {
         }
 
         // Single Event
-        if(1)
+        if(0)
         {
             float param_a = param_a_init;
             float param_b = param_b_init;
@@ -928,9 +940,9 @@ int main() {
                     saka::dval3 P1 = saka::make_dval3(tri0.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
                     //saka::dval3 wi = saka::normalize(saka::make_dval3(P0) - P1);
                     //saka::dval3 wo = saka::normalize(saka::make_dval3(P2) - P1);
-                    saka::dval3 wi = saka::make_dval3(P0) - P1;
-                    saka::dval3 wo = saka::make_dval3(P2) - P1;
-                    saka::dval3 n = -saka::make_dval3(minimum_lbvh::normalOf(tri0));
+                    //saka::dval3 wi = saka::make_dval3(P0) - P1;
+                    //saka::dval3 wo = saka::make_dval3(P2) - P1;
+                    //saka::dval3 n = -saka::make_dval3(minimum_lbvh::normalOf(tri0));
 
                     //saka::dval3 ht = refraction_normal(wi, wo, 1.3f);
                     //saka::dval3 c = cross(n, ht);
@@ -947,8 +959,14 @@ int main() {
                     //saka::dval3 R = reflection(wi, n);
                     //saka::dval3 c = cross(R, wo);
 
-                    saka::dval3 R = refraction2(wi, n, 1.3f);
-                    saka::dval3 c = cross(R, wo);
+                    //saka::dval3 R = refraction2(wi, n, 1.3f);
+                    //saka::dval3 c = cross(R, wo);
+
+                    saka::dval3 wi = saka::make_dval3(P0) - P1;
+                    saka::dval3 wo = saka::make_dval3(P2) - P1;
+                    saka::dval3 n = saka::make_dval3(-minimum_lbvh::unnormalizedNormalOf(tri0));
+                    saka::dval3 R = refraction_norm_free(wi, n, 1.3f);
+                    saka::dval3 c = saka::cross(wo, R);
 
                     A(0, i) = c.x.g;
                     A(1, i) = c.y.g;
@@ -963,16 +981,15 @@ int main() {
                 
                 sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
 
-                if ( newCost < curCost )
-                {
-                    alpha = fminf(alpha * (4.0f / 3.0f), 1.0f);
-                }
-                else
-                {
-                    alpha = fmaxf(alpha * (1.0f / 3.0f), 1.0f / 32.0f);
-                }
-                curCost = newCost;
-
+                //if ( newCost < curCost )
+                //{
+                //    alpha = fminf(alpha * (4.0f / 3.0f), 1.0f);
+                //}
+                //else
+                //{
+                //    alpha = fmaxf(alpha * (1.0f / 3.0f), 1.0f / 32.0f);
+                //}
+                //curCost = newCost;
                 //float movement = sqrtf(dparams(0, 0) * dparams(0, 0) + dparams(1, 0) * dparams(1, 0));
                 //float maxStep = 0.25f;
                 //float clampScale = fminf(1.0f, maxStep / movement);
@@ -985,7 +1002,7 @@ int main() {
             }
         }
 
-        if (0)
+        if (1)
         {
             // 2 Events
             static minimum_lbvh::Triangle tri1 = {
@@ -1088,18 +1105,21 @@ int main() {
 
                     for (int k = 0; k < K; k++)
                     {
-                        saka::dval3 wi = saka::normalize(vertices[k]     - vertices[k + 1]);
-                        saka::dval3 wo = saka::normalize(vertices[k + 2] - vertices[k + 1]);
-                        saka::dval3 n = saka::make_dval3(minimum_lbvh::normalOf(admissibleTriangles[k]));
+                        saka::dval3 wi = vertices[k]     - vertices[k + 1];
+                        saka::dval3 wo = vertices[k + 2] - vertices[k + 1];
+                        saka::dval3 n = saka::make_dval3(minimum_lbvh::unnormalizedNormalOf(admissibleTriangles[k]));
 
                         float eta = indexOfRefractions[k]; // eta_o / ita_i
                         if (dot(wi, n).v < 0.0f)
                         {
-                            eta = 1.0f / eta;
+                            std::swap(wi, wo);
                         }
 
                         // refraction
-                        saka::dval3 c = cross(n, wo * eta + wi);
+                        //saka::dval3 c = cross(n, wo * eta + wi);
+
+                        saka::dval3 R = refraction_norm_free(wi, n, eta);
+                        saka::dval3 c = saka::cross(wo, R);
 
                         // reflection
                         // saka::dval3 c = cross(n, wo + wi);
@@ -1117,31 +1137,9 @@ int main() {
                 }
 
                 sen::Mat<K * 2, 1> dparams = sen::solve_qr_overdetermined(A, b);
-                // naive
-                //for (int i = 0; i < nParameters; i++)
-                //{
-                //    parameters[i] = parameters[i] - dparams(i, 0);
-                //}
-                for (int k = 0; k < K; k++)
+                for (int i = 0; i < nParameters; i++)
                 {
-                    if (newCosts[k] < curCosts[k])
-                    {
-                        alphas[k] = fminf(alphas[k] * (4.0f / 3.0f), 1.0f);
-                    }
-                    else
-                    {
-                        alphas[k] = fmaxf(alphas[k] * (1.0f / 3.0f), 1.0f / 32.0f);
-                    }
-                    curCosts[k] = newCosts[k];
-
-                    float du = dparams(k * 2 + 0, 0);
-                    float dv = dparams(k * 2 + 1, 0);
-                    float movement = sqrtf(du * du + dv * dv);
-                    float maxStep = 0.25f;
-                    float clampScale = fminf(1.0f, maxStep / movement);
-
-                    parameters[k * 2 + 0] -= alphas[k] * du * clampScale;
-                    parameters[k * 2 + 1] -= alphas[k] * dv * clampScale;
+                    parameters[i] = parameters[i] - dparams(i, 0);
                 }
             }
         }
