@@ -126,6 +126,7 @@ inline saka::dval3 refraction_norm_free(saka::dval3 wi, saka::dval3 n, float eta
     saka::dval k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
     return -wi * NoN + n * (WIoN - sqrt(k));
 }
+
 inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
 {
     return {
@@ -343,8 +344,19 @@ int main() {
                 minimum_lbvh::NodeIndex parent(i, false);
 
                 minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[me.m_index];
+
+
+
                 float3 normal = minimum_lbvh::normalOf(tri);
-                minimum_lbvh::AABB normalBound = { normal, normal };
+                minimum_lbvh::AABB normalBound;
+                normalBound.setEmpty();
+
+                // take shading normal into account
+                const TriangleAttrib& attrib = mirrorPolygonSoup.triangleAttribs[me.m_index];
+                for (int k = 0; k < 3; k++)
+                {
+                    normalBound.extend(attrib.shadingNormals[k]);
+                }
 
                 while (parent != minimum_lbvh::NodeIndex::invalid())
                 {
@@ -1317,15 +1329,13 @@ int main() {
                         for (int i = 0; i < 2; i++)
                         {
                             interval::intr3 triangle_intr = toIntr3(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].aabbs[i]);
-
-                            interval::intr3 wi_intr = interval::normalize(p_to - triangle_intr);
-                            interval::intr3 wo_intr = interval::normalize(p_from - triangle_intr);
-
-                            interval::intr3 h_intr = interval::normalize(wi_intr + wo_intr);
+                            interval::intr3 wi_intr = p_to - triangle_intr;
+                            interval::intr3 wo_intr = p_from - triangle_intr;
                             interval::intr3 normal_intr = toIntr3(mirrorPolygonSoup.internalsNormalBound[currentNode.m_index].normalBounds[i]);
+                            interval::intr3 R = interval::reflection(wi_intr, normal_intr);
+                            interval::intr3 c = interval::cross(R, wo_intr);
 
-                            if (interval::intersects(h_intr, normal_intr, 1.0e-8f /* eps */) ||
-                                interval::intersects(-h_intr, normal_intr, 1.0e-8f /* eps */))
+                            if (interval::zeroIncluded(c))
                             {
                                 stack.push(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].children[i]);
                             }

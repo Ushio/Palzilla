@@ -242,6 +242,14 @@ namespace interval
             m31 * wi.x + m32 * wi.y + m33 * wi.z
         };
     }
+    inline intr3 refraction_norm_free(intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
+    {
+        intr NoN = dot(n, n);
+        intr WIoN = dot(wi, n);
+        intr WoW = dot(wi, wi);
+        intr k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
+        return -wi * NoN + n * (WIoN - sqrt(k));
+    }
 
     //inline intr3 normalize_naive(intr3 p)
     //{
@@ -472,6 +480,15 @@ namespace interval
         }
         return true;
     }
+
+    inline bool zeroIncluded(intr3 v)
+    {
+        return 
+            v.x.l * v.x.u <= 0.0f &&
+            v.y.l * v.y.u <= 0.0f &&
+            v.z.l * v.z.u <= 0.0f;
+    }
+
     inline intr3 cross(intr3 a, intr3 b)
     {
         return {
