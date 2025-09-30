@@ -136,6 +136,15 @@ inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
     };
 }
 
+// Building an Orthonormal Basis, Revisited
+void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
+    const float sign = copysignf(1.0f, zaxis.z);
+    const float a = -1.0f / (sign + zaxis.z);
+    const float b = zaxis.x * zaxis.y * a;
+    *xaxis = { 1.0f + sign * zaxis.x * zaxis.x * a, sign * b, -sign * zaxis.x };
+    *yaxis = { b, sign + zaxis.y * zaxis.y * a, -zaxis.y };
+}
+
 const float ADAM_BETA1 = 0.9f;
 const float ADAM_BETA2 = 0.99f;
 
@@ -1297,32 +1306,62 @@ int main() {
 
                             if (!invisible)
                             {
+                                saka::dval3 ro_0 = saka::make_dval3(p);
+                                float3 rd = normalize(hitP - p);
+                                float3 T0, T1;
+                                GetOrthonormalBasis(rd, &T0, &T1);
+
+                                float3 ng = minimum_lbvh::normalOf(tri);
+
+                                auto intersect_p_ray_plane = [](saka::dval3 ro, saka::dval3 rd, saka::dval3 ng, saka::dval3 v0)
+                                {
+                                    auto t = dot(v0 - ro, ng) / dot(ng, rd);
+                                    return ro + rd * t;
+                                };
+
+                                float3 dAxis[2];
+                                for (int i = 0; i < 2; i++)
+                                {
+                                    saka::dval differentials[2] = { 0.0f, 0.0f };
+                                    differentials[i].requires_grad();
+
+                                    saka::dval3 rd_0 = saka::make_dval3(rd)
+                                        + saka::make_dval3(rd + T0) * differentials[0]
+                                        + saka::make_dval3(rd + T1) * differentials[1];
+
+                                    saka::dval3 p = intersect_p_ray_plane(ro_0, rd_0, saka::make_dval3(ng), saka::make_dval3(tri.vs[0]));
+
+                                    saka::dval u = dot(p - saka::make_dval3(tri.vs[1]), saka::make_dval3(cross(ng, tri.vs[1] - tri.vs[0]))) * 0.5f;
+                                    saka::dval w = dot(p - saka::make_dval3(tri.vs[2]), saka::make_dval3(cross(ng, tri.vs[2] - tri.vs[1]))) * 0.5f;
+                                    saka::dval v = dot(p - saka::make_dval3(tri.vs[0]), saka::make_dval3(cross(ng, tri.vs[0] - tri.vs[2]))) * 0.5f;
+
+                                    saka::dval3 n =
+                                        saka::make_dval3(attrib.shadingNormals[0]) * w +
+                                        saka::make_dval3(attrib.shadingNormals[1]) * u +
+                                        saka::make_dval3(attrib.shadingNormals[2]) * v;
+                                    saka::dval3 wi = -rd_0;
+                                    saka::dval3 wo = reflection(wi, n);
+
+                                    saka::dval3 p_final = intersect_p_ray_plane(p, wo, saka::make_dval3(hitP - to(p_light)), saka::make_dval3(p_light));
+                                    dAxis[i] = { p_final.x.g,  p_final.y.g,  p_final.z.g };
+
+                                    //printf("x %.5f %.5f\n", p_final.x.v, p_light.x);
+                                    //printf("y %.5f %.5f\n", p_final.y.v, p_light.y);
+                                    //printf("z %.5f %.5f\n", p_final.z.v, p_light.z);
+                                }
+
+                                float3 crs = cross(dAxis[0], dAxis[1]);
+                                float dAdw = sqrtf(fmaxf( dot(crs, crs), 1.0e-15f ));
+
+                                L += reflectance * light_intencity / dAdw * fmaxf(dot(normalize(hitP - p), n), 0.0f);
+
                                 float3 d0to1 = hitP - p;
                                 float3 d1to2 = to(p_light) - hitP;
-                                float d2 = sqrt(dot(d0to1, d0to1)) + sqrt(dot(d1to2, d1to2));
-                                L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(hitP - p), n), 0.0f);
+                                float d = sqrt(dot(d0to1, d0to1)) + sqrt(dot(d1to2, d1to2));
+
+                                //L += reflectance * light_intencity / ( d * d ) * fmaxf(dot(normalize(hitP - p), n), 0.0f);
                             }
                         }
-
-                        //float3 m = mirror(p, normal, tri.vs[0]);
-                        //float3 rd = make_float3(p_light.x, p_light.y, p_light.z) - m;
-                        //float t;
-                        //float u, v;
-                        //float3 ng_triangle;
-                        //if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng_triangle, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
-                        //{
-                        //    float3 hitP = m + t * rd;
-
-                        //    bool invisible =
-                        //        occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, hitP, normalize(ng_triangle)) ||
-                        //        occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, hitP, normalize(ng_triangle), to(p_light), { 0, 0, 0 });
-
-                        //    if (!invisible)
-                        //    {
-                        //        float d2 = dot(rd, rd);
-                        //        L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(hitP - p), n), 0.0f);
-                        //    }
-                        //}
                     }
                     else
                     {
