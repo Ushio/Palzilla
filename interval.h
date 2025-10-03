@@ -218,6 +218,14 @@ namespace interval
     //    return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
     //}
 
+    inline intr lengthSquared(intr3 v)
+    {
+        intr nxx = square(v.x);
+        intr nyy = square(v.y);
+        intr nzz = square(v.z);
+        return nxx + nyy + nzz;
+    }
+
     inline intr3 reflection(intr3 wi, intr3 n)
     {
         float eps = 1.0e-10f;
@@ -244,12 +252,29 @@ namespace interval
     }
     inline intr3 refraction_norm_free(intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
     {
-        intr NoN = dot(n, n);
+        intr NoN = lengthSquared(n);
         intr WIoN = dot(wi, n);
-        intr WoW = dot(wi, wi);
-        intr k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
-        return -wi * NoN + n * (WIoN - sqrt(k));
+        intr WIoWI = lengthSquared(wi);
+        intr k = NoN * WIoWI * (eta * eta - 1.0f) + square(WIoN);
+
+        intr alpha = WIoN;
+        intr beta = NoN * WIoWI;
+
+        float g_lower = alpha.l - sqrtf(beta.u * (eta * eta - 1.0f) + alpha.l * alpha.l);
+        float g_upper = alpha.u - sqrtf(beta.l * (eta * eta - 1.0f) + alpha.u * alpha.u);
+        return -wi * NoN + n * intr{ g_lower, g_upper };
     }
+    //inline intr3 refraction_norm_free(intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
+    //{
+    //    intr NoN = lengthSquared(n);
+    //    intr WIoN = dot(wi, n);
+    //    intr WIoWI = lengthSquared(wi);
+    //    intr k = NoN * WIoWI * (eta * eta - 1.0f) + dotSquared(wi, n);
+
+    //    intr y = (1.0 / eta) * n.y / n.z * wi.x - wi.y;
+    //    intr c = (WIoN - sqrt(k));
+    //    return -wi * NoN + n * (WIoN - sqrt(k));
+    //}
 
     //inline intr3 normalize_naive(intr3 p)
     //{

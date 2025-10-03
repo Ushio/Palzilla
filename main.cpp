@@ -86,8 +86,8 @@ inline float3 refraction_norm_free(float3 wi, float3 n, float eta /* = eta_t / e
 {
     float NoN = dot(n, n);
     float WIoN = dot(wi, n);
-    float WoW = dot(wi, wi);
-    float k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
+    float WIoWI = dot(wi, wi);
+    float k = NoN * WIoWI * (eta * eta - 1.0f) + WIoN * WIoN;
     return -wi * NoN + (WIoN - sqrtf(k)) * n;
 }
 
@@ -674,27 +674,30 @@ int main() {
 
 #endif
 
-#if 0
+#if 1
         // refraction
-        float margin = 0.0f;
+        float margin = 0.2f;
 
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
 
-        static glm::vec3 N = { 0, 1.5f, 0 };
+        static glm::vec3 N = { 0, 1.f, 0 };
         ManipulatePosition(camera, &N, 0.3f);
 
-        float3 wi = normalize(to(P0));
+        
         float3 wi_unnormalized = to(P0);
 
-        DrawArrow({}, to(wi), 0.01f, { 255, 0, 0 });
+        DrawArrow({}, to(wi_unnormalized), 0.01f, { 255, 0, 0 });
         DrawArrow({}, N, 0.02f, { 0, 255, 255 });
-        DrawText(to(wi), "wi");
+        DrawText(to(wi_unnormalized), "wi(unnormalized)");
         DrawText(N, "N");
 
-        interval::intr3 wi_range = interval::relax(interval::make_intr3(wi.x, wi.y, wi.z), margin);
+        interval::intr3 wi_range = interval::relax(interval::make_intr3(wi_unnormalized.x, wi_unnormalized.y, wi_unnormalized.z), margin);
+        interval::intr3 wo_range = interval::refraction_norm_free(wi_range, interval::make_intr3(N), 1.3f);
 
         DrawAABB(wi_range, { 255, 0, 0 }, 1);
+        DrawAABB(wo_range, { 0, 255, 0 }, 1);
+
 
         float eta = 1.3f;
         // float3 wo = normalize(refraction(wi, normalize(to(N)), 1.3f));
@@ -702,10 +705,34 @@ int main() {
         
         DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
 
+        float3 wi = normalize(to(P0));
         //float3 ht = -(wi + wo * eta);
         float3 ht = refraction_normal(wi, wo, eta);
 
         DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
+
+        {
+            PCG rng;
+
+            float3 lower = { +FLT_MAX, +FLT_MAX, +FLT_MAX };
+            float3 upper = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+            for (int i = 0; i < 40000; i++)
+            {
+                float3 wi_random = {
+                    lerp(wi_range.x.l, wi_range.x.u, rng.uniformf()),
+                    lerp(wi_range.y.l, wi_range.y.u, rng.uniformf()),
+                    lerp(wi_range.z.l, wi_range.z.u, rng.uniformf()),
+                };
+
+                float3 wo_random = refraction_norm_free(wi_random, to(N), 1.3f);
+                DrawPoint(to(wo_random), { 255, 255, 0 }, 1);
+
+                lower = fminf(lower, wo_random);
+                upper = fmaxf(upper, wo_random);
+            }
+
+            DrawAABB(to(lower), to(upper), { 0, 0, 255 }, 3);
+        }
 #endif
 
 #if 0
@@ -1230,7 +1257,7 @@ int main() {
 #endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
