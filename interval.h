@@ -255,7 +255,6 @@ namespace interval
         intr NoN = lengthSquared(n);
         intr WIoN = dot(wi, n);
         intr WIoWI = lengthSquared(wi);
-        intr k = NoN * WIoWI * (eta * eta - 1.0f) + square(WIoN);
 
         intr alpha = WIoN;
         intr beta = NoN * WIoWI;
