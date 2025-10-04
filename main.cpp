@@ -677,6 +677,7 @@ int main() {
 #if 1
         // refraction
         float margin = 0.2f;
+        float eta = 2.2f;
 
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
@@ -693,15 +694,23 @@ int main() {
         DrawText(N, "N");
 
         interval::intr3 wi_range = interval::relax(interval::make_intr3(wi_unnormalized.x, wi_unnormalized.y, wi_unnormalized.z), margin);
-        interval::intr3 wo_range = interval::refraction_norm_free(wi_range, interval::make_intr3(N), 1.3f);
+        interval::intr3 wo_range = interval::refraction_norm_free(wi_range, interval::make_intr3(N), eta);
 
         DrawAABB(wi_range, { 255, 0, 0 }, 1);
         DrawAABB(wo_range, { 0, 255, 0 }, 1);
 
+        //{
+        //    interval::intr NoN = interval::lengthSquared(interval::make_intr3(N));
+        //    interval::intr WIoN = interval::dot(wi_range, interval::make_intr3(N));
+        //    interval::intr WIoWI = lengthSquared(wi_range);
 
-        float eta = 1.3f;
-        // float3 wo = normalize(refraction(wi, normalize(to(N)), 1.3f));
-        float3 wo = normalize(refraction_norm_free(wi_unnormalized, to(N), 1.3f) );
+        //    interval::intr alpha = WIoN;
+        //    interval::intr beta = NoN * WIoWI;
+        //    DrawAABB(interval::make_intr3(alpha, beta, 0), { 255, 0, 0 }, 1);
+        //}
+
+        // float3 wo = normalize(refraction(wi, normalize(to(N)), eta));
+        float3 wo = normalize(refraction_norm_free(wi_unnormalized, to(N), eta) );
         
         DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
 
@@ -724,11 +733,16 @@ int main() {
                     lerp(wi_range.z.l, wi_range.z.u, rng.uniformf()),
                 };
 
-                float3 wo_random = refraction_norm_free(wi_random, to(N), 1.3f);
+                float3 wo_random = refraction_norm_free(wi_random, to(N), eta);
                 DrawPoint(to(wo_random), { 255, 255, 0 }, 1);
 
                 lower = fminf(lower, wo_random);
                 upper = fmaxf(upper, wo_random);
+
+
+                //float alpha = dot(wi_random, to(N));
+                //float beta = dot(N, N) * dot(wi_random, wi_random);
+                //DrawPoint({ alpha, beta, 0 }, { 255, 0, 255 }, 1);
             }
 
             DrawAABB(to(lower), to(upper), { 0, 0, 255 }, 3);

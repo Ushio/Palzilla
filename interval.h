@@ -268,7 +268,7 @@ namespace interval
     //    intr NoN = lengthSquared(n);
     //    intr WIoN = dot(wi, n);
     //    intr WIoWI = lengthSquared(wi);
-    //    intr k = NoN * WIoWI * (eta * eta - 1.0f) + dotSquared(wi, n);
+    //    intr k = NoN * WIoWI * (eta * eta - 1.0f) + square(WIoN);
 
     //    intr y = (1.0 / eta) * n.y / n.z * wi.x - wi.y;
     //    intr c = (WIoN - sqrt(k));
