@@ -1,6 +1,7 @@
 #include "catch_amalgamated.hpp"
 #include "interval.h"
 #include "pk.h"
+#include "helper_math.h"
 
 const float pi = 3.14159265358979323846f;
 
@@ -69,8 +70,8 @@ TEST_CASE("square") {
             float x_sample = lerp(x_interval.l, x_interval.u, (float)j / (NSample - 1) );
             float xx_sample = x_sample * x_sample;
 
-            lower = std::min(lower, xx_sample);
-            upper = std::max(upper, xx_sample);
+            lower = fminf(lower, xx_sample);
+            upper = fminf(upper, xx_sample);
         }
 
         REQUIRE(xx_interval.l <= lower); // inside check

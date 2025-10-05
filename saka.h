@@ -175,4 +175,9 @@ namespace saka
             a.x * b.y - a.y * b.x
         };
     }
+
+    inline saka::dval3 reflection(saka::dval3 wi, saka::dval3 n)
+    {
+        return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
+    }
 }
