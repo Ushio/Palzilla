@@ -1085,14 +1085,36 @@ int main() {
             };
             minimum_lbvh::Triangle admissibleTriangles[K] = { tri1, tri0 };
 
-            TriangleAttrib admissibleAttribs[K] = {
-                { Material::Dielectric, 1.3f, {
-                    minimum_lbvh::normalOf(admissibleTriangles[0]), minimum_lbvh::normalOf(admissibleTriangles[0]), minimum_lbvh::normalOf(admissibleTriangles[0])}
-                },
-                { Material::Dielectric, 1.3f, {
-                    minimum_lbvh::normalOf(admissibleTriangles[1]), minimum_lbvh::normalOf(admissibleTriangles[1]), minimum_lbvh::normalOf(admissibleTriangles[1])}
-                },
+            auto curved_dielectric = [](minimum_lbvh::Triangle tri, float eta, float curve) {
+                float3 center = (tri.vs[0] + tri.vs[1] + tri.vs[2]) / 3.0f;
+
+                float3 ng = minimum_lbvh::normalOf(tri);
+                float3 n0 = normalize( ng + normalize(tri.vs[0] - center) * curve );
+                float3 n1 = normalize( ng + normalize(tri.vs[1] - center) * curve );
+                float3 n2 = normalize( ng + normalize(tri.vs[2] - center) * curve );
+
+                return TriangleAttrib{ Material::Dielectric, eta, { n0, n1, n2} };
             };
+
+            TriangleAttrib admissibleAttribs[K] = {
+                curved_dielectric(admissibleTriangles[0], 1.3f, 0.5f ),
+                curved_dielectric(admissibleTriangles[1], 1.3f, 0.5f ),
+            };
+
+            for (int k = 0; k < K; k++)
+            {
+                
+                for (int i = 0; i < 3; i++)
+                {
+                    float3 v = admissibleTriangles[k].vs[i];
+                    float3 n = admissibleAttribs[k].shadingNormals[i];
+                    DrawArrow(to(v), to(v + n), 0.01f, { 0, 255, 0 });
+                }
+            }
+
+            //EventDescriptor es;
+            //es.set(1, Event::T);
+            //es.set(0, Event::T);
 
             const int nParameters = K * 2;
             float parameters[nParameters];
@@ -1100,6 +1122,8 @@ int main() {
                 float3 vertices[K + 2];
                 vertices[0] = to(P0);
                 vertices[K + 1] = to(P2);
+
+                float3 shadingNormals[K];
 
                 for (int k = 0; k < K; k++)
                 {
@@ -1111,11 +1135,15 @@ int main() {
                     float3 e0 = tri.vs[1] - tri.vs[0];
                     float3 e1 = tri.vs[2] - tri.vs[0];
                     vertices[k + 1] = tri.vs[0] + e0 * param_u + e1 * param_v;
+
+                    TriangleAttrib attrib = admissibleAttribs[k];
+                    float3 ne0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
+                    float3 ne1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
+                    shadingNormals[k] = attrib.shadingNormals[0] + ne0 * param_u + ne1 * param_v;
                 }
 
                 for (int j = 0; j < K + 1; j++)
                 {
-
                     glm::vec3 a = to(vertices[j]);
                     glm::vec3 b = to(vertices[j + 1]);
                     if (converged)
@@ -1128,6 +1156,17 @@ int main() {
                     }
                     DrawPoint(b, { 255, 255, 255 }, 4);
                     DrawText(b, std::to_string(iter));
+                }
+
+                // draw normal
+                if (converged)
+                {
+                    for (int k = 0; k < K; k++)
+                    {
+                        float3 v = vertices[k + 1];
+                        float3 n = shadingNormals[k];
+                        DrawArrow(to(v), to(v + n * 0.2f), 0.005f, { 0, 255, 255 });
+                    }
                 }
             });
         }

@@ -77,6 +77,30 @@ struct SolverEmptyCallback {
     void operator()( int iter, bool converged ) const{}
 };
 
+enum class Event
+{
+    R = 0,
+    T = 1
+};
+struct EventDescriptor
+{
+    EventDescriptor() : m_events(0) {}
+
+    Event get(uint32_t index) const {
+        bool setbit = m_events & (1u << index);
+        return setbit ? Event::T : Event::R;
+    }
+    void set(uint32_t index, Event e)
+    {
+        m_events &= ~(1u << index);
+        if (e == Event::T)
+        {
+            m_events |= 1u << index;
+        }
+    }
+    uint32_t m_events;
+};
+
 // parameters: output barycentric coordinates
 template <int K, class callback = SolverEmptyCallback >
 inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
@@ -107,6 +131,8 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
             vertices[0] = saka::make_dval3(p_beg);
             vertices[K + 1] = saka::make_dval3(p_end);
 
+            saka::dval3 shadingNormals[K];
+
             for (int k = 0; k < K; k++)
             {
                 saka::dval param_u = parameters_optimizable[k * 2 + 0];
@@ -117,13 +143,18 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
                 float3 e0 = tri.vs[1] - tri.vs[0];
                 float3 e1 = tri.vs[2] - tri.vs[0];
                 vertices[k + 1] = saka::make_dval3(tri.vs[0]) + saka::make_dval3(e0) * param_u + saka::make_dval3(e1) * param_v;
+
+                TriangleAttrib attrib = attribs[k];
+                float3 ne0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
+                float3 ne1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
+                shadingNormals[k] = saka::make_dval3(attrib.shadingNormals[0]) + saka::make_dval3(ne0) * param_u + saka::make_dval3(ne1) * param_v;
             }
 
             for (int k = 0; k < K; k++)
             {
                 saka::dval3 wi = vertices[k] - vertices[k + 1];
                 saka::dval3 wo = vertices[k + 2] - vertices[k + 1];
-                saka::dval3 n = saka::make_dval3(minimum_lbvh::unnormalizedNormalOf(tris[k]));
+                saka::dval3 n = shadingNormals[k];
 
                 float eta = attribs[k].eta; // eta_o / ita_i
                 if (dot(wi, n).v < 0.0f)
