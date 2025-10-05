@@ -791,7 +791,7 @@ int main() {
         }
 #endif 
 
-#if 1
+#if 0
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -1165,7 +1165,7 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1234,69 +1234,22 @@ int main() {
                     if (currentNode.m_isLeaf)
                     {
                         minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[currentNode.m_index];
-
-                        // float3 normal = minimum_lbvh::normalOf(tri);
                         TriangleAttrib attrib = mirrorPolygonSoup.triangleAttribs[currentNode.m_index];
 
-                        float param_a = 1.0f / 3.0f;
-                        float param_b = 1.0f / 3.0f;
+                        float parameters[2];
+                        EventDescriptor eDescriptor;
+                        eDescriptor.set(0, Event::R);
+                        bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eDescriptor, 32, 1.0e-10f);
 
-                        float3 e0 = tri.vs[1] - tri.vs[0];
-                        float3 e1 = tri.vs[2] - tri.vs[0];
-                        float3 en0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
-                        float3 en1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
-
-                        bool converged = false;
-
-                        int N_iter = 64;
-                        for (int iter = 0; iter < N_iter; iter++)
+                        if(converged && 0.0f <= parameters[0] && 0.0f <= parameters[1] && parameters[0] + parameters[1] < 1.0f)
                         {
-                            float3 P1 = tri.vs[0] + e0 * param_a + e1 * param_b;
+                            float3 e0 = tri.vs[1] - tri.vs[0];
+                            float3 e1 = tri.vs[2] - tri.vs[0];
+                            float3 en0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
+                            float3 en1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
 
-                            sen::Mat<3, 2> A;
-                            sen::Mat<3, 1> b;
-
-                            float newCost = 0.0f;
-
-                            for (int i = 0; i < 2; i++)
-                            {
-                                saka::dval params[2] = { param_a, param_b };
-                                params[i].requires_grad();
-
-                                saka::dval3 P1 = saka::make_dval3(tri.vs[0]) + saka::make_dval3(e0) * params[0] + saka::make_dval3(e1) * params[1];
-                                saka::dval3 wi = saka::make_dval3(p) - P1;
-                                saka::dval3 wo = saka::make_dval3(p_light) - P1;
-                                saka::dval3 n = saka::make_dval3(attrib.shadingNormals[0]) + saka::make_dval3(en0) * params[0] + saka::make_dval3(en1) * params[1];
-
-                                saka::dval3 R = reflection(wi, n);
-                                saka::dval3 c = cross(wo, R);
-
-                                newCost = dot(c, c).v;
-
-                                A(0, i) = c.x.g;
-                                A(1, i) = c.y.g;
-                                A(2, i) = c.z.g;
-
-                                b(0, 0) = c.x.v;
-                                b(1, 0) = c.y.v;
-                                b(2, 0) = c.z.v;
-                            }
-
-                            if (newCost < 1.0e-10f)
-                            {
-                                converged = true;
-                                break;
-                            }
-
-                            sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
-                            param_a = param_a - dparams(0, 0);
-                            param_b = param_b - dparams(1, 0);
-                        }
-
-                        if(converged && 0.0f <= param_a && 0.0f <= param_b && param_a + param_b < 1.0f )
-                        {
-                            float3 hitP = tri.vs[0] + e0 * param_a + e1 * param_b;
-                            float3 hitN = attrib.shadingNormals[0] + en0 * param_a + en1 * param_b;
+                            float3 hitP = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
+                            float3 hitN = attrib.shadingNormals[0] + en0 * parameters[0] + en1 * parameters[1];
 
                             bool invisible =
                                 occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, hitP, normalize(hitN)) ||
@@ -1305,13 +1258,7 @@ int main() {
                             if (!invisible)
                             {
                                 float dAdwValue = dAdw(p, hitP - p, to(p_light), &tri, &attrib, 1);
-
                                 L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(hitP - p), n), 0.0f);
-
-                                //float3 d0to1 = hitP - p;
-                                //float3 d1to2 = to(p_light) - hitP;
-                                //float d = sqrt(dot(d0to1, d0to1)) + sqrt(dot(d1to2, d1to2));
-                                //L += reflectance * light_intencity / ( d * d ) * fmaxf(dot(normalize(hitP - p), n), 0.0f);
                             }
                         }
                     }
