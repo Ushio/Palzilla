@@ -252,6 +252,12 @@ namespace minimum_lbvh
 			coord = clamp(coord, 0, MORTON_MAX_VALUE_3D);
 			return minimum_lbvh::encodeMortonCode(coord.x, coord.y, coord.z);
 		}
+
+		MINIMUM_LBVH_DEVICE float surfaceArea() const
+		{
+			float3 size = upper - lower;
+			return (size.x * size.y + size.y * size.z + size.z * size.x) * 2.0f;
+		}
 	};
 
 	struct NodeIndex

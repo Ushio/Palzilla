@@ -382,40 +382,172 @@ struct AdmissibleTriangles
     int indices[K];
 };
 
-template <class callback>
-inline void traverseAdmissibleNodes(float3 p_beg, float3 p_end, minimum_lbvh::InternalNode *internals, InternalNormalBound* internalsNormalBound, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, minimum_lbvh::NodeIndex node, callback admissibles )
+template <int K>
+struct AdmissibleNodes
 {
-    interval::intr3 p_from = interval::make_intr3(p_beg);
-    interval::intr3 p_to = interval::make_intr3(p_end);
+    minimum_lbvh::NodeIndex nodes[K];
 
-    std::stack<minimum_lbvh::NodeIndex> stack;
-    stack.push(minimum_lbvh::NodeIndex::invalid());
-    minimum_lbvh::NodeIndex currentNode = node;
-
-    while (currentNode != minimum_lbvh::NodeIndex::invalid())
+    static AdmissibleNodes<K> invalid()
     {
-        if (currentNode.m_isLeaf)
+        AdmissibleNodes<K> admissible;
+        for (int i = 0; i < K; i++)
         {
-            AdmissibleTriangles<1> admissibleTriangles;
-            admissibleTriangles.indices[0] = currentNode.m_index;
+            admissible.nodes[i] = minimum_lbvh::NodeIndex::invalid();
+        }
+        return admissible;
+    }
+};
+
+inline minimum_lbvh::AABB nodeAABB(const  minimum_lbvh::InternalNode& node)
+{
+    minimum_lbvh::AABB bounds = node.aabbs[0];
+    bounds.extend(node.aabbs[1]);
+    return bounds;
+}
+
+template <int K, class callback>
+inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float3 p_beg, float3 p_end, minimum_lbvh::InternalNode *internals, InternalNormalBound* internalsNormalBound, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, minimum_lbvh::NodeIndex node, callback admissibles )
+{
+    interval::intr3 p_beg_intr = interval::make_intr3(p_beg);
+    interval::intr3 p_end_intr = interval::make_intr3(p_end);
+
+    //std::stack<minimum_lbvh::NodeIndex> stack;
+    //stack.push(minimum_lbvh::NodeIndex::invalid());
+    //minimum_lbvh::NodeIndex currentNode = node;
+
+    //while (currentNode != minimum_lbvh::NodeIndex::invalid())
+    //{
+    //    if (currentNode.m_isLeaf)
+    //    {
+    //        AdmissibleTriangles<K> admissibleTriangles;
+    //        admissibleTriangles.indices[0] = currentNode.m_index;
+    //        admissibles(admissibleTriangles);
+    //    }
+    //    else
+    //    {
+    //        for (int i = 0; i < 2; i++)
+    //        {
+    //            interval::intr3 triangle_intr = toIntr3(internals[currentNode.m_index].aabbs[i]);
+    //            interval::intr3 wi_intr = p_to - triangle_intr;
+    //            interval::intr3 wo_intr = p_from - triangle_intr;
+    //            interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.m_index].normalBounds[i]);
+    //            interval::intr3 R = interval::reflection(wi_intr, normal_intr);
+    //            interval::intr3 c = interval::cross(R, wo_intr);
+
+    //            if (interval::zeroIncluded(c))
+    //            {
+    //                stack.push(internals[currentNode.m_index].children[i]);
+    //            }
+    //        }
+    //    }
+
+    //    currentNode = stack.top(); stack.pop();
+    //}
+
+    std::stack<AdmissibleNodes<K>> stack;
+    stack.push(AdmissibleNodes<K>::invalid());
+
+    AdmissibleNodes<K> currentNode;
+    for (int i = 0; i < K; i++)
+    {
+        currentNode.nodes[i] = node;
+    }
+
+    while (currentNode.nodes[0] != minimum_lbvh::NodeIndex::invalid())
+    {
+        int cutIndex = -1;
+        float maxSA = -1.0f;
+        for (int i = 0; i < K; i++)
+        {
+            minimum_lbvh::NodeIndex node = currentNode.nodes[i];
+            if (node.m_isLeaf)
+            {
+                continue;
+            }
+            
+            minimum_lbvh::AABB bounds = nodeAABB(internals[node.m_index]);
+            float sa = bounds.surfaceArea();
+            if (maxSA < sa)
+            {
+                cutIndex = i;
+                maxSA = sa;
+            }
+        }
+
+        if (cutIndex == -1) // meaning all of them are leaf.
+        {
+            AdmissibleTriangles<K> admissibleTriangles;
+            for (int i = 0; i < K; i++)
+            {
+                admissibleTriangles.indices[i] = currentNode.nodes[i].m_index;
+            }
             admissibles(admissibleTriangles);
         }
         else
         {
             for (int i = 0; i < 2; i++)
             {
-                interval::intr3 triangle_intr = toIntr3(internals[currentNode.m_index].aabbs[i]);
-                interval::intr3 wi_intr = p_to - triangle_intr;
-                interval::intr3 wo_intr = p_from - triangle_intr;
-                interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.m_index].normalBounds[i]);
-                interval::intr3 R = interval::reflection(wi_intr, normal_intr);
-                interval::intr3 c = interval::cross(R, wo_intr);
-
-                if (interval::zeroIncluded(c))
+                interval::intr3 triangle_intr = toIntr3(internals[currentNode.nodes[cutIndex].m_index].aabbs[i]);
+                interval::intr3 prev_vert, next_vert;
+                if (cutIndex == 0)
                 {
-                    stack.push(internals[currentNode.m_index].children[i]);
+                    prev_vert = p_beg_intr;
                 }
+                else
+                {
+                    prev_vert = toIntr3(nodeAABB(internals[currentNode.nodes[cutIndex - 1].m_index]));
+                }
+
+                if (cutIndex == K - 1)
+                {
+                    next_vert = p_end_intr;
+                }
+                else
+                {
+                    next_vert = toIntr3(nodeAABB(internals[currentNode.nodes[cutIndex + 1].m_index]));
+                }
+
+                interval::intr3 wi_intr = next_vert - triangle_intr;
+                interval::intr3 wo_intr = prev_vert - triangle_intr;
+                interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.nodes[cutIndex].m_index].normalBounds[i]);
+                interval::intr3 R = interval::reflection(wi_intr, normal_intr);
+                interval::intr3 Rc = interval::cross(R, wo_intr);
+
+                if (interval::zeroIncluded(Rc))
+                {
+                    AdmissibleNodes<K> newNodes = currentNode;
+                    newNodes.nodes[cutIndex] = internals[currentNode.nodes[cutIndex].m_index].children[i];
+                    stack.push(newNodes);
+                }
+                
+                // admissibleEvents
+
             }
+        }
+
+        //if (currentNode.m_isLeaf)
+        //{
+        //    AdmissibleTriangles<K> admissibleTriangles;
+        //    admissibleTriangles.indices[0] = currentNode.m_index;
+        //    admissibles(admissibleTriangles);
+        //}
+        //else
+        {
+
+            //for (int i = 0; i < 2; i++)
+            //{
+            //    interval::intr3 triangle_intr = toIntr3(internals[currentNode.m_index].aabbs[i]);
+            //    interval::intr3 wi_intr = p_to - triangle_intr;
+            //    interval::intr3 wo_intr = p_from - triangle_intr;
+            //    interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.m_index].normalBounds[i]);
+            //    interval::intr3 R = interval::reflection(wi_intr, normal_intr);
+            //    interval::intr3 c = interval::cross(R, wo_intr);
+
+            //    if (interval::zeroIncluded(c))
+            //    {
+            //        stack.push(internals[currentNode.m_index].children[i]);
+            //    }
+            //}
         }
 
         currentNode = stack.top(); stack.pop();

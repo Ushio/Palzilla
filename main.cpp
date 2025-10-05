@@ -152,7 +152,7 @@ struct PolygonSoup
     std::vector<TriangleAttrib> triangleAttribs;
 };
 
-struct MirrorPolygonSoup
+struct DeltaPolygonSoup
 {
     minimum_lbvh::BVHCPUBuilder builder;
     std::vector<InternalNormalBound> internalsNormalBound;
@@ -187,7 +187,7 @@ int main() {
     PolygonSoup polygonSoup;
 
     // mirror 
-    MirrorPolygonSoup mirrorPolygonSoup;
+    DeltaPolygonSoup deltaPolygonSoup;
 
     scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
         if (polymesh->visible() == false)
@@ -203,6 +203,10 @@ int main() {
             if (matString == "mirror")
             {
                 material = Material::Mirror;
+            }
+            else if (matString == "dielectric")
+            {
+                material = Material::Dielectric;
             }
         }
 
@@ -243,19 +247,20 @@ int main() {
 
         for (int i = 0; i < polygonSoup.triangles.size(); i++)
         {
-            if (polygonSoup.triangleAttribs[i].material == Material::Mirror)
+            if (polygonSoup.triangleAttribs[i].material == Material::Mirror ||
+                polygonSoup.triangleAttribs[i].material == Material::Dielectric)
             {
-                mirrorPolygonSoup.triangles.push_back(polygonSoup.triangles[i]);
-                mirrorPolygonSoup.triangleAttribs.push_back(polygonSoup.triangleAttribs[i]);
+                deltaPolygonSoup.triangles.push_back(polygonSoup.triangles[i]);
+                deltaPolygonSoup.triangleAttribs.push_back(polygonSoup.triangleAttribs[i]);
             }
         }
 
-        mirrorPolygonSoup.builder.build(mirrorPolygonSoup.triangles.data(), mirrorPolygonSoup.triangles.size(), minimum_lbvh::BUILD_OPTION_USE_NORMAL );
-        mirrorPolygonSoup.internalsNormalBound.resize(polygonSoup.triangles.size() - 1);
+        deltaPolygonSoup.builder.build(deltaPolygonSoup.triangles.data(), deltaPolygonSoup.triangles.size(), minimum_lbvh::BUILD_OPTION_USE_NORMAL );
+        deltaPolygonSoup.internalsNormalBound.resize(polygonSoup.triangles.size() - 1);
 
-        minimum_lbvh::InternalNode* internals = mirrorPolygonSoup.builder.m_internals.data();
-        InternalNormalBound* internalsNormalBound = mirrorPolygonSoup.internalsNormalBound.data();
-        for (uint32_t i = 0; i < mirrorPolygonSoup.builder.m_internals.size(); i++)
+        minimum_lbvh::InternalNode* internals = deltaPolygonSoup.builder.m_internals.data();
+        InternalNormalBound* internalsNormalBound = deltaPolygonSoup.internalsNormalBound.data();
+        for (uint32_t i = 0; i < deltaPolygonSoup.builder.m_internals.size(); i++)
         {
             for (int j = 0; j < 2; j++)
             {
@@ -267,7 +272,7 @@ int main() {
 
                 minimum_lbvh::NodeIndex parent(i, false);
 
-                minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[me.m_index];
+                minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[me.m_index];
 
 
 
@@ -276,7 +281,7 @@ int main() {
                 normalBound.setEmpty();
 
                 // take shading normal into account
-                const TriangleAttrib& attrib = mirrorPolygonSoup.triangleAttribs[me.m_index];
+                const TriangleAttrib& attrib = deltaPolygonSoup.triangleAttribs[me.m_index];
                 for (int k = 0; k < 3; k++)
                 {
                     normalBound.extend(attrib.shadingNormals[k]);
@@ -655,7 +660,7 @@ int main() {
         // Brute force search 
 
         if(0)
-        for (auto tri : mirrorPolygonSoup.triangles)
+        for (auto tri : deltaPolygonSoup.triangles)
         {
             interval::intr3 triangle_intr =
                 interval::make_intr3(tri.vs[0].x, tri.vs[0].y, tri.vs[0].z) |
@@ -694,14 +699,14 @@ int main() {
 
         std::stack<minimum_lbvh::NodeIndex> stack;
         stack.push(minimum_lbvh::NodeIndex::invalid());
-        minimum_lbvh::NodeIndex currentNode = mirrorPolygonSoup.builder.m_rootNode;
+        minimum_lbvh::NodeIndex currentNode = deltaPolygonSoup.builder.m_rootNode;
 
         if (1)
         while (currentNode != minimum_lbvh::NodeIndex::invalid())
         {
             if (currentNode.m_isLeaf)
             {
-                minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[currentNode.m_index];
+                minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[currentNode.m_index];
                 for (int j = 0; j < 3; ++j)
                 {
                     float3 v0 = tri.vs[j];
@@ -725,18 +730,18 @@ int main() {
             {
                 for (int i = 0; i < 2; i++)
                 {
-                    interval::intr3 triangle_intr = toIntr3(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].aabbs[i]);
+                    interval::intr3 triangle_intr = toIntr3(deltaPolygonSoup.builder.m_internals[currentNode.m_index].aabbs[i]);
 
                     interval::intr3 wi_intr = interval::normalize(interval::make_intr3(P0.x, P0.y, P0.z) - triangle_intr);
                     interval::intr3 wo_intr = interval::normalize(interval::make_intr3(P2.x, P2.y, P2.z) - triangle_intr);
 
                     interval::intr3 h_intr = interval::normalize(wi_intr + wo_intr);
-                    interval::intr3 normal_intr = toIntr3(mirrorPolygonSoup.internalsNormalBound[currentNode.m_index].normalBounds[i]);
+                    interval::intr3 normal_intr = toIntr3(deltaPolygonSoup.internalsNormalBound[currentNode.m_index].normalBounds[i]);
 
                     if (interval::intersects(h_intr, normal_intr, 1.0e-8f /* eps */) ||
                         interval::intersects(-h_intr, normal_intr, 1.0e-8f /* eps */))
                     {
-                        stack.push(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].children[i]);
+                        stack.push(deltaPolygonSoup.builder.m_internals[currentNode.m_index].children[i]);
                     }
                 }
             }
@@ -745,7 +750,7 @@ int main() {
         }
 #endif 
 
-#if 1
+#if 0
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -1119,7 +1124,7 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1156,7 +1161,7 @@ int main() {
                     n = -n;
                 }
 
-                if (polygonSoup.triangleAttribs[hit.triangleIndex].material == Material::Mirror)
+                if (polygonSoup.triangleAttribs[hit.triangleIndex].material != Material::Diffuse)
                 {
                     // handle later
                     image(i, j) = { 0, 255, 255, 255 };
@@ -1178,20 +1183,24 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-                traverseAdmissibleNodes(
-                    p, to(p_light),
-                    mirrorPolygonSoup.builder.m_internals.data(),
-                    mirrorPolygonSoup.internalsNormalBound.data(),
-                    mirrorPolygonSoup.triangles.data(),
-                    mirrorPolygonSoup.triangleAttribs.data(),
-                    mirrorPolygonSoup.builder.m_rootNode, 
-                    [&](AdmissibleTriangles<1> admissibleTriangles) {
-                        minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[admissibleTriangles.indices[0]];
-                        TriangleAttrib attrib = mirrorPolygonSoup.triangleAttribs[admissibleTriangles.indices[0]];
+#if 1
+                // reflection 1 level
+                float parameters[2];
+                EventDescriptor eDescriptor;
+                eDescriptor.set(0, Event::R);
 
-                        float parameters[2];
-                        EventDescriptor eDescriptor;
-                        eDescriptor.set(0, Event::R);
+                traverseAdmissibleNodes<1>(
+                    eDescriptor,
+                    p, to(p_light),
+                    deltaPolygonSoup.builder.m_internals.data(),
+                    deltaPolygonSoup.internalsNormalBound.data(),
+                    deltaPolygonSoup.triangles.data(),
+                    deltaPolygonSoup.triangleAttribs.data(),
+                    deltaPolygonSoup.builder.m_rootNode, 
+                    [&](AdmissibleTriangles<1> admissibleTriangles) {
+                        minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
+                        TriangleAttrib attrib = deltaPolygonSoup.triangleAttribs[admissibleTriangles.indices[0]];
+
                         bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eta, eDescriptor, 32, 1.0e-10f);
 
                         if (converged && 0.0f <= parameters[0] && 0.0f <= parameters[1] && parameters[0] + parameters[1] < 1.0f)
@@ -1212,6 +1221,24 @@ int main() {
                             }
                         }
                     });
+#else
+                // refraction 2 levels
+                EventDescriptor eDescriptor;
+                eDescriptor.set(0, Event::T);
+                eDescriptor.set(1, Event::T);
+
+                traverseAdmissibleNodes<2>(
+                    eDescriptor,
+                    p, to(p_light),
+                    deltaPolygonSoup.builder.m_internals.data(),
+                    deltaPolygonSoup.internalsNormalBound.data(),
+                    deltaPolygonSoup.triangles.data(),
+                    deltaPolygonSoup.triangleAttribs.data(),
+                    deltaPolygonSoup.builder.m_rootNode,
+                    [&](AdmissibleTriangles<2> admissibleTriangles) {
+
+                });
+#endif
 
                 float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 
