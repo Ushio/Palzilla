@@ -103,7 +103,7 @@ struct EventDescriptor
 
 // parameters: output barycentric coordinates
 template <int K, class callback = SolverEmptyCallback >
-inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
+inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
 {
     const int nParameters = K * 2;
     for (int i = 0; i < nParameters; i++)
@@ -162,14 +162,18 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
                     std::swap(wi, wo);
                 }
 
-                // refraction
-                //saka::dval3 c = cross(n, wo * eta + wi);
 
-                saka::dval3 R = refraction_norm_free(wi, n, eta);
-                saka::dval3 c = saka::cross(wo, R);
+                saka::dval3 wo_optimize;
+                if (eDescriptor.get(k) == Event::T)
+                {
+                    wo_optimize = saka::refraction_norm_free(wi, n, eta);
+                }
+                else
+                {
+                    wo_optimize = saka::reflection(wi, n);
+                }
 
-                // reflection
-                // saka::dval3 c = cross(n, wo + wi);
+                saka::dval3 c = saka::cross(wo, wo_optimize);
 
                 A(k * 3 + 0, i) = c.x.g;
                 A(k * 3 + 1, i) = c.y.g;

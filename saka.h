@@ -180,4 +180,13 @@ namespace saka
     {
         return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
     }
+
+    inline saka::dval3 refraction_norm_free(saka::dval3 wi, saka::dval3 n, float eta /* = eta_t / eta_i */)
+    {
+        saka::dval NoN = dot(n, n);
+        saka::dval WIoN = dot(wi, n);
+        saka::dval WoW = dot(wi, wi);
+        saka::dval k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
+        return -wi * NoN + n * (WIoN - sqrt(k));
+    }
 }

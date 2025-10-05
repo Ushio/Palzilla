@@ -106,14 +106,6 @@ inline saka::dval3 refraction_normal(saka::dval3 wi /*normalized*/, saka::dval3 
 //    saka::dval k = dot(wi, wi) * (eta * eta - 1.0f) + WIoN * WIoN;
 //    return -wi + n * (WIoN - saka::sqrt(k));
 //}
-inline saka::dval3 refraction_norm_free(saka::dval3 wi, saka::dval3 n, float eta /* = eta_t / eta_i */)
-{
-    saka::dval NoN = dot(n, n);
-    saka::dval WIoN = dot(wi, n);
-    saka::dval WoW = dot(wi, wi);
-    saka::dval k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
-    return -wi * NoN + n * (WIoN - sqrt(k));
-}
 
 inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
 {
@@ -1112,13 +1104,13 @@ int main() {
                 }
             }
 
-            //EventDescriptor es;
-            //es.set(1, Event::T);
-            //es.set(0, Event::T);
+            EventDescriptor es;
+            es.set(1, Event::T);
+            es.set(0, Event::T);
 
             const int nParameters = K * 2;
             float parameters[nParameters];
-            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 32, 1.0e-7f, [&](int iter, bool converged) {
+            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, es, 32, 1.0e-7f, [&](int iter, bool converged) {
                 float3 vertices[K + 2];
                 vertices[0] = to(P0);
                 vertices[K + 1] = to(P2);
