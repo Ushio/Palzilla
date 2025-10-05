@@ -362,3 +362,64 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
     float dAdwValue = sqrtf(fmaxf(dot(crs, crs), 1.0e-15f));
     return dAdwValue;
 }
+
+struct InternalNormalBound
+{
+    minimum_lbvh::AABB normalBounds[2];
+    uint32_t counter;
+};
+
+inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
+{
+    return {
+        {aabb.lower.x, aabb.upper.x},
+        {aabb.lower.y, aabb.upper.y},
+        {aabb.lower.z, aabb.upper.z}
+    };
+}
+
+template <int K>
+struct AdmissibleTriangles
+{
+    int indices[K];
+};
+
+template <class callback>
+inline void traverseAdmissibleNodes(float3 p_beg, float3 p_end, minimum_lbvh::InternalNode *internals, InternalNormalBound* internalsNormalBound, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, minimum_lbvh::NodeIndex node, callback admissibles )
+{
+    interval::intr3 p_from = interval::make_intr3(p_beg);
+    interval::intr3 p_to = interval::make_intr3(p_end);
+
+    std::stack<minimum_lbvh::NodeIndex> stack;
+    stack.push(minimum_lbvh::NodeIndex::invalid());
+    minimum_lbvh::NodeIndex currentNode = node;
+
+    while (currentNode != minimum_lbvh::NodeIndex::invalid())
+    {
+        if (currentNode.m_isLeaf)
+        {
+            AdmissibleTriangles<1> admissibleTriangles;
+            admissibleTriangles.indices[0] = currentNode.m_index;
+            admissibles(admissibleTriangles);
+        }
+        else
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                interval::intr3 triangle_intr = toIntr3(internals[currentNode.m_index].aabbs[i]);
+                interval::intr3 wi_intr = p_to - triangle_intr;
+                interval::intr3 wo_intr = p_from - triangle_intr;
+                interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.m_index].normalBounds[i]);
+                interval::intr3 R = interval::reflection(wi_intr, normal_intr);
+                interval::intr3 c = interval::cross(R, wo_intr);
+
+                if (interval::zeroIncluded(c))
+                {
+                    stack.push(internals[currentNode.m_index].children[i]);
+                }
+            }
+        }
+
+        currentNode = stack.top(); stack.pop();
+    }
+}

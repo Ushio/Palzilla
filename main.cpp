@@ -107,16 +107,6 @@ inline saka::dval3 refraction_normal(saka::dval3 wi /*normalized*/, saka::dval3 
 //    return -wi + n * (WIoN - saka::sqrt(k));
 //}
 
-inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
-{
-    return {
-        {aabb.lower.x, aabb.upper.x},
-        {aabb.lower.y, aabb.upper.y},
-        {aabb.lower.z, aabb.upper.z}
-    };
-}
-
-
 const float ADAM_BETA1 = 0.9f;
 const float ADAM_BETA2 = 0.99f;
 
@@ -162,11 +152,6 @@ struct PolygonSoup
     std::vector<TriangleAttrib> triangleAttribs;
 };
 
-struct InternalNormalBound
-{
-    minimum_lbvh::AABB normalBounds[2];
-    uint32_t counter;
-};
 struct MirrorPolygonSoup
 {
     minimum_lbvh::BVHCPUBuilder builder;
@@ -1192,26 +1177,23 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-                interval::intr3 p_to   = interval::make_intr3(p_light.x, p_light.y, p_light.z);
-                interval::intr3 p_from = interval::make_intr3(p.x, p.y, p.z);
-
-                std::stack<minimum_lbvh::NodeIndex> stack;
-                stack.push(minimum_lbvh::NodeIndex::invalid());
-                minimum_lbvh::NodeIndex currentNode = mirrorPolygonSoup.builder.m_rootNode;
-
-                while (currentNode != minimum_lbvh::NodeIndex::invalid())
-                {
-                    if (currentNode.m_isLeaf)
-                    {
-                        minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[currentNode.m_index];
-                        TriangleAttrib attrib = mirrorPolygonSoup.triangleAttribs[currentNode.m_index];
+                traverseAdmissibleNodes(
+                    p, to(p_light),
+                    mirrorPolygonSoup.builder.m_internals.data(),
+                    mirrorPolygonSoup.internalsNormalBound.data(),
+                    mirrorPolygonSoup.triangles.data(),
+                    mirrorPolygonSoup.triangleAttribs.data(),
+                    mirrorPolygonSoup.builder.m_rootNode, 
+                    [&](AdmissibleTriangles<1> admissibleTriangles) {
+                        minimum_lbvh::Triangle tri = mirrorPolygonSoup.triangles[admissibleTriangles.indices[0]];
+                        TriangleAttrib attrib = mirrorPolygonSoup.triangleAttribs[admissibleTriangles.indices[0]];
 
                         float parameters[2];
                         EventDescriptor eDescriptor;
                         eDescriptor.set(0, Event::R);
                         bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eDescriptor, 32, 1.0e-10f);
 
-                        if(converged && 0.0f <= parameters[0] && 0.0f <= parameters[1] && parameters[0] + parameters[1] < 1.0f)
+                        if (converged && 0.0f <= parameters[0] && 0.0f <= parameters[1] && parameters[0] + parameters[1] < 1.0f)
                         {
                             bool contributable = contributablePath<1>(
                                 parameters, p, to(p_light), &tri, &attrib, eDescriptor,
@@ -1228,28 +1210,7 @@ int main() {
                                 L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
                             }
                         }
-                    }
-                    else
-                    {
-                        for (int i = 0; i < 2; i++)
-                        {
-                            interval::intr3 triangle_intr = toIntr3(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].aabbs[i]);
-                            interval::intr3 wi_intr = p_to - triangle_intr;
-                            interval::intr3 wo_intr = p_from - triangle_intr;
-                            interval::intr3 normal_intr = toIntr3(mirrorPolygonSoup.internalsNormalBound[currentNode.m_index].normalBounds[i]);
-                            interval::intr3 R = interval::reflection(wi_intr, normal_intr);
-                            interval::intr3 c = interval::cross(R, wo_intr);
-
-                            if (interval::zeroIncluded(c))
-                            {
-                                stack.push(mirrorPolygonSoup.builder.m_internals[currentNode.m_index].children[i]);
-                            }
-                        }
-                    }
-
-                    currentNode = stack.top(); stack.pop();
-                }
-
+                    });
 
                 float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 
