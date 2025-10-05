@@ -14,7 +14,6 @@ enum class Material
 struct TriangleAttrib
 {
     Material material;
-    float eta;
     float3 shadingNormals[3];
 };
 
@@ -103,7 +102,7 @@ struct EventDescriptor
 
 // parameters: output barycentric coordinates
 template <int K, class callback = SolverEmptyCallback >
-inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
+inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
 {
     const int nParameters = K * 2;
     for (int i = 0; i < nParameters; i++)
@@ -156,7 +155,6 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
                 saka::dval3 wo = vertices[k + 2] - vertices[k + 1];
                 saka::dval3 n = shadingNormals[k];
 
-                float eta = attribs[k].eta; // eta_o / ita_i
                 if (dot(wi, n).v < 0.0f)
                 {
                     std::swap(wi, wo);

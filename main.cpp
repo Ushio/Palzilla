@@ -219,7 +219,6 @@ int main() {
             minimum_lbvh::Triangle tri;
             TriangleAttrib attrib;
             attrib.material = material;
-            attrib.eta = 1.0f;
             for (int j = 0; j < nVerts; ++j)
             {
                 glm::vec3 p = positions[indices[indexBase + j]];
@@ -746,7 +745,7 @@ int main() {
         }
 #endif 
 
-#if 0
+#if 1
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -1032,7 +1031,7 @@ int main() {
             };
             minimum_lbvh::Triangle admissibleTriangles[K] = { tri1, tri0 };
 
-            auto curved_dielectric = [](minimum_lbvh::Triangle tri, float eta, float curve) {
+            auto curved_dielectric = [](minimum_lbvh::Triangle tri, float curve) {
                 float3 center = (tri.vs[0] + tri.vs[1] + tri.vs[2]) / 3.0f;
 
                 float3 ng = minimum_lbvh::normalOf(tri);
@@ -1040,12 +1039,12 @@ int main() {
                 float3 n1 = normalize( ng + normalize(tri.vs[1] - center) * curve );
                 float3 n2 = normalize( ng + normalize(tri.vs[2] - center) * curve );
 
-                return TriangleAttrib{ Material::Dielectric, eta, { n0, n1, n2} };
+                return TriangleAttrib{ Material::Dielectric, { n0, n1, n2} };
             };
 
             TriangleAttrib admissibleAttribs[K] = {
-                curved_dielectric(admissibleTriangles[0], 1.3f, 0.5f ),
-                curved_dielectric(admissibleTriangles[1], 1.3f, 0.5f ),
+                curved_dielectric(admissibleTriangles[0], 0.5f ),
+                curved_dielectric(admissibleTriangles[1], 0.5f ),
             };
 
             for (int k = 0; k < K; k++)
@@ -1065,7 +1064,7 @@ int main() {
 
             const int nParameters = K * 2;
             float parameters[nParameters];
-            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, es, 32, 1.0e-7f, [&](int iter, bool converged) {
+            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 1.3f, es, 32, 1.0e-7f, [&](int iter, bool converged) {
                 float3 vertices[K + 2];
                 vertices[0] = to(P0);
                 vertices[K + 1] = to(P2);
@@ -1120,7 +1119,7 @@ int main() {
 #endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1131,6 +1130,8 @@ int main() {
         image.allocate(GetScreenWidth() / stride, GetScreenHeight() / stride);
 
         CameraRayGenerator rayGenerator(GetCurrentViewMatrix(), GetCurrentProjMatrix(), image.width(), image.height());
+
+        float eta = 1.5f;
 
         //for (int j = 0; j < image.height(); ++j)
         ParallelFor(image.height(), [&](int j) {
@@ -1191,7 +1192,7 @@ int main() {
                         float parameters[2];
                         EventDescriptor eDescriptor;
                         eDescriptor.set(0, Event::R);
-                        bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eDescriptor, 32, 1.0e-10f);
+                        bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eta, eDescriptor, 32, 1.0e-10f);
 
                         if (converged && 0.0f <= parameters[0] && 0.0f <= parameters[1] && parameters[0] + parameters[1] < 1.0f)
                         {
