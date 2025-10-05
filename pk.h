@@ -1,17 +1,20 @@
 #include <math.h>
 #include "helper_math.h"
 #include "saka.h"
+#include "sen.h"
 #include "minimum_lbvh.h"
 
 enum class Material
 {
     Diffuse,
     Mirror,
+    Dielectric,
 };
 
 struct TriangleAttrib
 {
     Material material;
+    float eta;
     float3 shadingNormals[3];
 };
 
@@ -68,6 +71,105 @@ void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
     const float b = zaxis.x * zaxis.y * a;
     *xaxis = { 1.0f + sign * zaxis.x * zaxis.x * a, sign * b, -sign * zaxis.x };
     *yaxis = { b, sign + zaxis.y * zaxis.y * a, -zaxis.y };
+}
+
+struct SolverEmptyCallback {
+    void operator()( int iter, bool converged ) const{}
+};
+
+// parameters: output barycentric coordinates
+template <int K, class callback = SolverEmptyCallback >
+inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
+{
+    const int nParameters = K * 2;
+    for (int i = 0; i < nParameters; i++)
+    {
+        parameters[i] = 1.0f / 3.0f;
+    }
+
+    for (int iter = 0; iter < maxIterations; iter++)
+    {
+        sen::Mat<K * 3, K * 2> A;
+        sen::Mat<K * 3, 1> b;
+
+        float cost = 0.0f;
+
+        for (int i = 0; i < nParameters; i++)
+        {
+            saka::dval parameters_optimizable[nParameters];
+            for (int j = 0; j < nParameters; j++)
+            {
+                parameters_optimizable[j] = parameters[j];
+            }
+            parameters_optimizable[i].requires_grad();
+
+            saka::dval3 vertices[K + 2];
+            vertices[0] = saka::make_dval3(p_beg);
+            vertices[K + 1] = saka::make_dval3(p_end);
+
+            for (int k = 0; k < K; k++)
+            {
+                saka::dval param_u = parameters_optimizable[k * 2 + 0];
+                saka::dval param_v = parameters_optimizable[k * 2 + 1];
+
+                minimum_lbvh::Triangle tri = tris[k];
+
+                float3 e0 = tri.vs[1] - tri.vs[0];
+                float3 e1 = tri.vs[2] - tri.vs[0];
+                vertices[k + 1] = saka::make_dval3(tri.vs[0]) + saka::make_dval3(e0) * param_u + saka::make_dval3(e1) * param_v;
+            }
+
+            for (int k = 0; k < K; k++)
+            {
+                saka::dval3 wi = vertices[k] - vertices[k + 1];
+                saka::dval3 wo = vertices[k + 2] - vertices[k + 1];
+                saka::dval3 n = saka::make_dval3(minimum_lbvh::unnormalizedNormalOf(tris[k]));
+
+                float eta = attribs[k].eta; // eta_o / ita_i
+                if (dot(wi, n).v < 0.0f)
+                {
+                    std::swap(wi, wo);
+                }
+
+                // refraction
+                //saka::dval3 c = cross(n, wo * eta + wi);
+
+                saka::dval3 R = refraction_norm_free(wi, n, eta);
+                saka::dval3 c = saka::cross(wo, R);
+
+                // reflection
+                // saka::dval3 c = cross(n, wo + wi);
+
+                A(k * 3 + 0, i) = c.x.g;
+                A(k * 3 + 1, i) = c.y.g;
+                A(k * 3 + 2, i) = c.z.g;
+
+                b(k * 3 + 0, 0) = c.x.v;
+                b(k * 3 + 1, 0) = c.y.v;
+                b(k * 3 + 2, 0) = c.z.v;
+
+                if( i == 0 )
+                {
+                    cost += dot(c, c).v;
+                }
+            }
+        }
+
+        if (cost < costTolerance)
+        {
+            end_of_iter(iter, true);
+            return true;
+        }
+
+        sen::Mat<K * 2, 1> dparams = sen::solve_qr_overdetermined(A, b);
+        for (int i = 0; i < nParameters; i++)
+        {
+            parameters[i] = parameters[i] - dparams(i, 0);
+        }
+
+        end_of_iter(iter, iter == maxIterations - 1);
+    }
+    return false;
 }
 
 inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, int nEvent)

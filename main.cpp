@@ -272,6 +272,7 @@ int main() {
             minimum_lbvh::Triangle tri;
             TriangleAttrib attrib;
             attrib.material = material;
+            attrib.eta = 1.0f;
             for (int j = 0; j < nVerts; ++j)
             {
                 glm::vec3 p = positions[indices[indexBase + j]];
@@ -1079,124 +1080,56 @@ int main() {
                 DrawLine(to(tri1.vs[i]), to(tri1.vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
             }
 
-            const int K = 2;
+            enum {
+                K = 2
+            };
             minimum_lbvh::Triangle admissibleTriangles[K] = { tri1, tri0 };
-            float indexOfRefractions[2] = {1.3f, 1.3f};
 
-            float3 P_beg = to(P0);
-            float3 P_end = to(P2);
+            TriangleAttrib admissibleAttribs[K] = {
+                { Material::Dielectric, 1.3f, {
+                    minimum_lbvh::normalOf(admissibleTriangles[0]), minimum_lbvh::normalOf(admissibleTriangles[0]), minimum_lbvh::normalOf(admissibleTriangles[0])}
+                },
+                { Material::Dielectric, 1.3f, {
+                    minimum_lbvh::normalOf(admissibleTriangles[1]), minimum_lbvh::normalOf(admissibleTriangles[1]), minimum_lbvh::normalOf(admissibleTriangles[1])}
+                },
+            };
 
             const int nParameters = K * 2;
             float parameters[nParameters];
-            for (int i = 0; i < nParameters; i++)
-            {
-                parameters[i] = 1.0f / 3.0f;
-            }
+            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 32, 1.0e-7f, [&](int iter, bool converged) {
+                float3 vertices[K + 2];
+                vertices[0] = to(P0);
+                vertices[K + 1] = to(P2);
 
-            float curCosts[K];
-            float alphas[K];
-            for (int k = 0; k < K; k++)
-            {
-                curCosts[k] = 1.0e+15f;
-                alphas[k] = 1.0f;
-            }
-
-            int N_iter = 300;
-            for (int iter = 0; iter < N_iter; iter++)
-            {
-                sen::Mat<K * 3, K * 2> A;
-                sen::Mat<K * 3, 1> b;
-
-                float newCosts[K];
                 for (int k = 0; k < K; k++)
                 {
-                    newCosts[k] = 1.0e+15f;
+                    float param_u = parameters[k * 2 + 0];
+                    float param_v = parameters[k * 2 + 1];
+
+                    minimum_lbvh::Triangle tri = admissibleTriangles[k];
+
+                    float3 e0 = tri.vs[1] - tri.vs[0];
+                    float3 e1 = tri.vs[2] - tri.vs[0];
+                    vertices[k + 1] = tri.vs[0] + e0 * param_u + e1 * param_v;
                 }
 
-                for (int i = 0; i < nParameters; i++)
+                for (int j = 0; j < K + 1; j++)
                 {
-                    saka::dval parameters_optimizable[nParameters];
-                    for (int j = 0; j < nParameters; j++)
+
+                    glm::vec3 a = to(vertices[j]);
+                    glm::vec3 b = to(vertices[j + 1]);
+                    if (converged)
                     {
-                        parameters_optimizable[j] = parameters[j];
+                        DrawLine(a, b, { 255, 64, 64 }, 2);
                     }
-                    parameters_optimizable[i].requires_grad();
-
-                    saka::dval3 vertices[K + 2];
-                    vertices[0]     = saka::make_dval3(P_beg);
-                    vertices[K + 1] = saka::make_dval3(P_end);
-
-                    for (int k = 0; k < K; k++)
+                    else
                     {
-                        saka::dval param_u = parameters_optimizable[k * 2 + 0];
-                        saka::dval param_v = parameters_optimizable[k * 2 + 1];
-
-                        minimum_lbvh::Triangle tri = admissibleTriangles[k];
-
-                        float3 e0 = tri.vs[1] - tri.vs[0];
-                        float3 e1 = tri.vs[2] - tri.vs[0];
-                        vertices[k + 1] = saka::make_dval3(tri.vs[0]) + saka::make_dval3(e0) * param_u + saka::make_dval3(e1) * param_v;
+                        DrawLine(a, b, { 64, 64, 64 }, 1);
                     }
-                    // debug draw
-                    if (i == 0)
-                    {
-                        for (int j = 0; j < K + 1; j++)
-                        {
-
-                            glm::vec3 a = { vertices[j].x.v, vertices[j].y.v, vertices[j].z.v };
-                            glm::vec3 b = { vertices[j + 1].x.v, vertices[j + 1].y.v, vertices[j + 1].z.v };
-                            if (iter == N_iter - 1)
-                            {
-                                DrawLine(a, b, { 255, 64, 64 }, 2);
-                            }
-                            else
-                            {
-                                DrawLine(a, b, { 64, 64, 64 }, 1);
-                            }
-                            DrawPoint(b, { 255, 255, 255 }, 4);
-                            DrawText(b, std::to_string(iter));
-                        }
-                    }
-
-                    for (int k = 0; k < K; k++)
-                    {
-                        saka::dval3 wi = vertices[k]     - vertices[k + 1];
-                        saka::dval3 wo = vertices[k + 2] - vertices[k + 1];
-                        saka::dval3 n = saka::make_dval3(minimum_lbvh::unnormalizedNormalOf(admissibleTriangles[k]));
-
-                        float eta = indexOfRefractions[k]; // eta_o / ita_i
-                        if (dot(wi, n).v < 0.0f)
-                        {
-                            std::swap(wi, wo);
-                        }
-
-                        // refraction
-                        //saka::dval3 c = cross(n, wo * eta + wi);
-
-                        saka::dval3 R = refraction_norm_free(wi, n, eta);
-                        saka::dval3 c = saka::cross(wo, R);
-
-                        // reflection
-                        // saka::dval3 c = cross(n, wo + wi);
-
-                        A(k * 3 + 0, i) = c.x.g;
-                        A(k * 3 + 1, i) = c.y.g;
-                        A(k * 3 + 2, i) = c.z.g;
-
-                        b(k * 3 + 0, 0) = c.x.v;
-                        b(k * 3 + 1, 0) = c.y.v;
-                        b(k * 3 + 2, 0) = c.z.v;
-
-                        newCosts[k] = dot(c, c).v;
-                    }
+                    DrawPoint(b, { 255, 255, 255 }, 4);
+                    DrawText(b, std::to_string(iter));
                 }
-
-                sen::Mat<K * 2, 1> dparams = sen::solve_qr_overdetermined(A, b);
-                for (int i = 0; i < nParameters; i++)
-                {
-                    parameters[i] = parameters[i] - dparams(i, 0);
-                }
-            }
+            });
         }
 #endif
 
