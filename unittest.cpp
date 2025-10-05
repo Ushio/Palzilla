@@ -1,5 +1,8 @@
 #include "catch_amalgamated.hpp"
 #include "interval.h"
+#include "pk.h"
+
+const float pi = 3.14159265358979323846f;
 
 inline float random_float(uint32_t u)
 {
@@ -46,11 +49,6 @@ struct PCG
     uint64_t state;  // RNG state.  All values are possible.
     uint64_t inc;    // Controls which RNG sequence(stream) is selected. Must *always* be odd.
 };
-
-inline float lerp(float a, float b, float t)
-{
-    return a + (b - a) * t;
-}
 
 TEST_CASE("square") {
     using namespace interval;
@@ -116,3 +114,29 @@ TEST_CASE("normalize") {
     }
 }
 
+TEST_CASE("refract") {
+    PCG rng(103, 178);
+
+    for (int j = 0; j < 100; j++)
+    {
+        float eta = 1.0f + rng.uniformf();
+        int N = 100;
+        for (int i = 0; i < N; i++)
+        {
+            float theta = pi * 0.5f * i / N;
+            float3 n = { 0, 0.1f + rng.uniformf() * 3.0f, 0};
+            float3 wi = {
+                cosf(theta) * n.x - sinf(theta) * n.y,
+                sinf(theta) * n.x + cosf(theta) * n.y,
+            };
+
+            float R = fresnel_exact_norm_free(wi, n, eta);
+
+            float3 wo = refraction_norm_free(wi, n, eta);
+
+            float R_inv = fresnel_exact_norm_free(wo, -n, 1.0f / eta);
+
+            REQUIRE( fabsf(R - R_inv) < 1.0e-3f );
+        }
+    }
+}

@@ -21,6 +21,7 @@ project "main"
 
     -- Src
     files { "main.cpp" }
+    files { "*.h" }
 
     -- prlib
     -- setup command

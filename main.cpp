@@ -9,6 +9,7 @@
 #include "saka.h"
 #include "sen.h"
 #include "sobol.h"
+#include "pk.h"
 
 inline void clamp_uv(float* u_inout, float* v_inout, minimum_lbvh::Triangle tri)
 {
@@ -40,37 +41,6 @@ inline void clamp_uv(float* u_inout, float* v_inout, minimum_lbvh::Triangle tri)
 }
 
 // TODO unit test
-inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
-    float c = dot(n, wi);
-    float k = eta * eta - 1.0f + c * c;
-    if (k < 0.0f)
-    {
-        return 1.0f; // TIR
-    }
-    float g = sqrtf(k);
-
-    auto sqr = [](float x) { return x * x; };
-    float gmc = g - c;
-    float gpc = g + c;
-    return 0.5f * sqr(gmc / gpc) * (1.0f + sqr((c * gpc - 1.0f) / (c * gmc + 1.0f)));
-}
-
-inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
-    float nn = dot(n, n);
-    float wiwi = dot(wi, wi);
-    float C = dot(n, wi);
-    float K = nn * wiwi * (eta * eta - 1.0f ) + C * C;
-    if (K < 0.0f)
-    {
-        return 1.0f; // TIR
-    }
-    float G = sqrtf(K);
-
-    auto sqr = [](float x) { return x * x; };
-    float GmC = G - C;
-    float GpC = G + C;
-    return 0.5f * sqr(GmC / GpC) * (1.0f + sqr((C * GpC - nn * wiwi) / (C * GmC + nn * wiwi)));
-}
 
 inline glm::vec3 to(float3 p)
 {
@@ -115,14 +85,6 @@ inline float3 refraction(float3 wi /* normalized */, float3 n /* normalized */, 
 //    return -wi + (WIoN - sqrtf(k)) * n;
 //}
 
-inline float3 refraction_norm_free(float3 wi, float3 n, float eta /* = eta_t / eta_i */)
-{
-    float NoN = dot(n, n);
-    float WIoN = dot(wi, n);
-    float WIoWI = dot(wi, wi);
-    float k = NoN * WIoWI * (eta * eta - 1.0f) + WIoN * WIoN;
-    return -wi * NoN + (WIoN - sqrtf(k)) * n;
-}
 
 inline float3 refraction_normal(float3 wi /*normalized*/, float3 wo /*normallized*/, float eta /* = eta_t / eta_i */)
 {
@@ -754,28 +716,28 @@ int main() {
         DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
 
 
-        if (1)
-        {
-            DrawGrid(GridAxis::XY, 1.0f, 10, { 128, 128, 128 });
+        //if (1)
+        //{
+        //    DrawGrid(GridAxis::XY, 1.0f, 10, { 128, 128, 128 });
 
-            float eta = 1.4f;
-            int N = 1000;
-            for (int i = 0; i < N; i++)
-            {
-                glm::vec3 n = { 0, 3, 0 };
-                glm::vec3 wi = glm::angleAxis( glm::pi<float>() * 0.5f * i / N, glm::vec3(0.0f, 0.0f, 1.0f)) * n * 0.4f;
+        //    float eta = 1.96346688f;
+        //    int N = 1000;
+        //    for (int i = 0; i < N; i++)
+        //    {
+        //        glm::vec3 n = { 0, 3, 0 };
+        //        glm::vec3 wi = glm::angleAxis( glm::pi<float>() * 0.5f * i / N, glm::vec3(0.0f, 0.0f, 1.0f)) * n * 0.4f;
 
-                float R = fresnel_exact_norm_free(to(wi), to(n), eta);
-                float T = 1.0f - R;
-                float x = (float)i / N;
-                DrawPoint({ x, R, 0 }, { 255, 255, 255 }, 3);
+        //        float R = fresnel_exact_norm_free(to(wi), to(n), eta);
+        //        float T = 1.0f - R;
+        //        float x = (float)i / N;
+        //        DrawPoint({ x, R, 0 }, { 255, 255, 255 }, 3);
 
-                float3 wo = refraction_norm_free(to(wi), to(n), eta);
+        //        float3 wo = refraction_norm_free(to(wi), to(n), eta);
 
-                float T_inv = 1.0f - fresnel_exact_norm_free(wo, to(-n), 1.0f / eta);
-                // printf("%f %f\n", T, T_inv);
-            }
-        }
+        //        float T_inv = 1.0f - fresnel_exact_norm_free(wo, to(-n), 1.0f / eta);
+        //        // printf("%f %f\n", T, T_inv);
+        //    }
+        //}
 
         if(0)
         {
