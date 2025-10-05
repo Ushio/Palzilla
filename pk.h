@@ -207,15 +207,108 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
     return false;
 }
 
+inline bool occluded(
+    const minimum_lbvh::InternalNode* nodes,
+    const minimum_lbvh::Triangle* triangles,
+    minimum_lbvh::NodeIndex node,
+    float3 from,
+    float3 from_n,
+    float3 to,
+    float3 to_n)
+{
+    if (dot(to - from, from_n) < 0.0f)
+    {
+        from_n = -from_n;
+    }
+    if (dot(from - to, to_n) < 0.0f)
+    {
+        to_n = -to_n;
+    }
+
+    float eps = 1.0e-6f;
+    float3 from_safe = from + from_n * eps;
+    float3 to_safe = to + to_n * eps;
+
+    float3 rd = to_safe - from_safe;
+
+    minimum_lbvh::Hit hit;
+    hit.t = 1.0f;
+    minimum_lbvh::intersect_stackfree(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
+    return hit.t < 1.0f;
+}
+
+template <int K>
+inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, const minimum_lbvh::InternalNode* nodes, const minimum_lbvh::Triangle* sceneTriangles, minimum_lbvh::NodeIndex node )
+{
+    float3 vertices[K + 2];
+    vertices[0] = p_beg;
+    vertices[K + 1] = p_end;
+
+    float3 shadingNormals[K + 2];
+
+    for (int k = 0; k < K; k++)
+    {
+        float param_u = parameters[k * 2 + 0];
+        float param_v = parameters[k * 2 + 1];
+
+        // out side of triangle
+        if (param_u < 0.0f || param_v < 0.0f || 1.0f < param_u + param_v)
+        {
+            return false;
+        }
+
+        minimum_lbvh::Triangle tri = tris[k];
+
+        float3 e0 = tri.vs[1] - tri.vs[0];
+        float3 e1 = tri.vs[2] - tri.vs[0];
+        vertices[k + 1] = tri.vs[0] + e0 * param_u + e1 * param_v;
+
+        TriangleAttrib attrib = attribs[k];
+        float3 ne0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
+        float3 ne1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
+        shadingNormals[k + 1] = normalize(attrib.shadingNormals[0] + ne0 * param_u + ne1 * param_v);
+    }
+
+    shadingNormals[0] = normalize(vertices[1] - vertices[0]);
+    shadingNormals[K + 1] = normalize(vertices[K] - vertices[K + 1]);
+
+    for (int k = 0; k < K; k++)
+    {
+        float3 wi = vertices[k] - vertices[k + 1];
+        float3 wo = vertices[k + 2] - vertices[k + 1];
+        float3 n = shadingNormals[k + 1];
+
+        Event e = 0.0f < dot(wi, n) * dot(wo, n) ? Event::R : Event::T;
+        if (eDescriptor.get(k) != e)
+        {
+            return false; // invalid event
+        }
+    }
+
+    // check occlusions
+    for (int i = 0; i < K + 1; i++)
+    {
+        float3 v0 = vertices[i];
+        float3 v1 = vertices[i + 1];
+        float3 n0 = shadingNormals[i];
+        float3 n1 = shadingNormals[i + 1];
+        if (occluded(nodes, sceneTriangles, node, v0, n0, v1, n1))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, int nEvent)
 {
     rd = normalize(rd);
 
     auto intersect_p_ray_plane = [](saka::dval3 ro, saka::dval3 rd, saka::dval3 ng, saka::dval3 v0)
-        {
-            auto t = dot(v0 - ro, ng) / dot(ng, rd);
-            return ro + rd * t;
-        };
+    {
+        auto t = dot(v0 - ro, ng) / dot(ng, rd);
+        return ro + rd * t;
+    };
 
     float3 dAxis[2];
     for (int i = 0; i < 2; i++)

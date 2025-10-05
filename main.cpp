@@ -175,36 +175,6 @@ struct MirrorPolygonSoup
     std::vector<TriangleAttrib> triangleAttribs;
 };
 
-inline bool occluded(
-    const minimum_lbvh::InternalNode* nodes,
-    const minimum_lbvh::Triangle* triangles,
-    minimum_lbvh::NodeIndex node,
-    float3 from,
-    float3 from_n,
-    float3 to,
-    float3 to_n )
-{
-    if (dot(to - from, from_n) < 0.0f)
-    {
-        from_n = -from_n;
-    }
-    if (dot(from - to, to_n) < 0.0f)
-    {
-        to_n = -to_n;
-    }
-
-    float eps = 1.0e-6f;
-    float3 from_safe = from + from_n * eps;
-    float3 to_safe = to + to_n * eps;
-
-    float3 rd = to_safe - from_safe;
-
-    minimum_lbvh::Hit hit;
-    hit.t = 1.0f;
-    minimum_lbvh::intersect_stackfree(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
-    return hit.t < 1.0f;
-}
-
 int main() {
     using namespace pr;
 
@@ -1243,22 +1213,19 @@ int main() {
 
                         if(converged && 0.0f <= parameters[0] && 0.0f <= parameters[1] && parameters[0] + parameters[1] < 1.0f)
                         {
-                            float3 e0 = tri.vs[1] - tri.vs[0];
-                            float3 e1 = tri.vs[2] - tri.vs[0];
-                            float3 en0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
-                            float3 en1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
+                            bool contributable = contributablePath<1>(
+                                parameters, p, to(p_light), &tri, &attrib, eDescriptor,
+                                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
 
-                            float3 hitP = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
-                            float3 hitN = attrib.shadingNormals[0] + en0 * parameters[0] + en1 * parameters[1];
-
-                            bool invisible =
-                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, p, n, hitP, normalize(hitN)) ||
-                                occluded(polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, hitP, normalize(hitN), to(p_light), { 0, 0, 0 });
-
-                            if (!invisible)
+                            if (contributable)
                             {
-                                float dAdwValue = dAdw(p, hitP - p, to(p_light), &tri, &attrib, 1);
-                                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(hitP - p), n), 0.0f);
+                                minimum_lbvh::Triangle firstTri = tri;
+                                float3 e0 = firstTri.vs[1] - firstTri.vs[0];
+                                float3 e1 = firstTri.vs[2] - firstTri.vs[0];
+                                float3 firstHit = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
+
+                                float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, 1);
+                                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
                             }
                         }
                     }
