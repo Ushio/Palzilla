@@ -601,7 +601,7 @@ int main() {
         //    }
         //}
 
-        if(0)
+        if(1)
         {
             PCG rng;
 
@@ -631,7 +631,7 @@ int main() {
         }
 #endif
 
-#if 0
+#if 1
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -648,7 +648,7 @@ int main() {
 
         pr::PrimEnd();
 
-        static glm::vec3 P0 = { 0, 0.5f, 0 };
+        static glm::vec3 P0 = { 1, 0.5f, 0 };
         ManipulatePosition(camera, &P0, 0.3f);
 
         static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
@@ -701,12 +701,22 @@ int main() {
         stack.push(minimum_lbvh::NodeIndex::invalid());
         minimum_lbvh::NodeIndex currentNode = deltaPolygonSoup.builder.m_rootNode;
 
-        if (1)
-        while (currentNode != minimum_lbvh::NodeIndex::invalid())
-        {
-            if (currentNode.m_isLeaf)
-            {
-                minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[currentNode.m_index];
+        // reflection 1 level
+        float parameters[2];
+        EventDescriptor eDescriptor;
+        eDescriptor.set(0, Event::R);
+
+        traverseAdmissibleNodes<1>(
+            eDescriptor,
+            1.0f,
+            to(P0), to(P2),
+            deltaPolygonSoup.builder.m_internals.data(),
+            deltaPolygonSoup.internalsNormalBound.data(),
+            deltaPolygonSoup.triangles.data(),
+            deltaPolygonSoup.triangleAttribs.data(),
+            deltaPolygonSoup.builder.m_rootNode,
+            [&](AdmissibleTriangles<1> admissibleTriangles) {
+                minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
                 for (int j = 0; j < 3; ++j)
                 {
                     float3 v0 = tri.vs[j];
@@ -725,29 +735,7 @@ int main() {
                     DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
                     DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
                 }
-            }
-            else
-            {
-                for (int i = 0; i < 2; i++)
-                {
-                    interval::intr3 triangle_intr = toIntr3(deltaPolygonSoup.builder.m_internals[currentNode.m_index].aabbs[i]);
-
-                    interval::intr3 wi_intr = interval::normalize(interval::make_intr3(P0.x, P0.y, P0.z) - triangle_intr);
-                    interval::intr3 wo_intr = interval::normalize(interval::make_intr3(P2.x, P2.y, P2.z) - triangle_intr);
-
-                    interval::intr3 h_intr = interval::normalize(wi_intr + wo_intr);
-                    interval::intr3 normal_intr = toIntr3(deltaPolygonSoup.internalsNormalBound[currentNode.m_index].normalBounds[i]);
-
-                    if (interval::intersects(h_intr, normal_intr, 1.0e-8f /* eps */) ||
-                        interval::intersects(-h_intr, normal_intr, 1.0e-8f /* eps */))
-                    {
-                        stack.push(deltaPolygonSoup.builder.m_internals[currentNode.m_index].children[i]);
-                    }
-                }
-            }
-
-            currentNode = stack.top(); stack.pop();
-        }
+            });
 #endif 
 
 #if 0
@@ -1124,7 +1112,7 @@ int main() {
 #endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1183,7 +1171,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 1
+#if 0
                 // reflection 1 level
                 float parameters[2];
                 EventDescriptor eDescriptor;
@@ -1191,6 +1179,7 @@ int main() {
 
                 traverseAdmissibleNodes<1>(
                     eDescriptor,
+                    1.0f,
                     p, to(p_light),
                     deltaPolygonSoup.builder.m_internals.data(),
                     deltaPolygonSoup.internalsNormalBound.data(),
@@ -1229,6 +1218,7 @@ int main() {
 
                 traverseAdmissibleNodes<2>(
                     eDescriptor,
+                    1.3f,
                     p, to(p_light),
                     deltaPolygonSoup.builder.m_internals.data(),
                     deltaPolygonSoup.internalsNormalBound.data(),

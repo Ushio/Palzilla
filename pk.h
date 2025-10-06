@@ -406,7 +406,7 @@ inline minimum_lbvh::AABB nodeAABB(const  minimum_lbvh::InternalNode& node)
 }
 
 template <int K, class callback>
-inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float3 p_beg, float3 p_end, minimum_lbvh::InternalNode *internals, InternalNormalBound* internalsNormalBound, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, minimum_lbvh::NodeIndex node, callback admissibles )
+inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta, float3 p_beg, float3 p_end, minimum_lbvh::InternalNode *internals, InternalNormalBound* internalsNormalBound, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, minimum_lbvh::NodeIndex node, callback admissibles )
 {
     interval::intr3 p_beg_intr = interval::make_intr3(p_beg);
     interval::intr3 p_end_intr = interval::make_intr3(p_end);
@@ -510,44 +510,52 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float3 p_b
                 interval::intr3 wi_intr = next_vert - triangle_intr;
                 interval::intr3 wo_intr = prev_vert - triangle_intr;
                 interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.nodes[cutIndex].m_index].normalBounds[i]);
-                interval::intr3 R = interval::reflection(wi_intr, normal_intr);
-                interval::intr3 Rc = interval::cross(R, wo_intr);
+                
+                bool admissible = false;
+                if (admissibleEvents.get(cutIndex) == Event::R) // maybe process always later
+                {
+                    interval::intr3 R = interval::reflection(wi_intr, normal_intr);
+                    interval::intr3 Rc = interval::cross(R, wo_intr);
 
-                if (interval::zeroIncluded(Rc))
+                    if (interval::zeroIncluded(Rc))
+                    {
+                        admissible = true;
+                    }
+                }
+                else
+                {
+                    interval::intr3 wi = interval::normalize(wi_intr);
+                    interval::intr3 wo = interval::normalize(wo_intr);
+                    interval::intr3 c0 = interval::cross(normal_intr, wi * eta + wo);
+                    interval::intr3 c1 = interval::cross(normal_intr, wo * eta + wi);
+                    if (interval::zeroIncluded(c0) || interval::zeroIncluded(c1))
+                    {
+                        admissible = true;
+                    }
+                    // in order to avoid eta < 1 while both cases, try both.
+                    //interval::intr3 T = interval::refraction_norm_free(wi_intr, normal_intr, eta);
+                    //interval::intr3 Tc = interval::cross(T, wo_intr);
+                    //if (interval::zeroIncluded(Tc))
+                    //{
+                    //    admissible = true;
+                    //}
+
+                    //interval::intr3 T_inv = interval::refraction_norm_free(wo_intr, normal_intr, eta);
+                    //interval::intr3 Tc_inv = interval::cross(T_inv, wi_intr);
+                    //if (interval::zeroIncluded(Tc) || interval::zeroIncluded(Tc_inv))
+                    //{
+                    //    admissible = true;
+                    //}
+                }
+
+                if (admissible)
                 {
                     AdmissibleNodes<K> newNodes = currentNode;
                     newNodes.nodes[cutIndex] = internals[currentNode.nodes[cutIndex].m_index].children[i];
                     stack.push(newNodes);
                 }
-                
-                // admissibleEvents
 
             }
-        }
-
-        //if (currentNode.m_isLeaf)
-        //{
-        //    AdmissibleTriangles<K> admissibleTriangles;
-        //    admissibleTriangles.indices[0] = currentNode.m_index;
-        //    admissibles(admissibleTriangles);
-        //}
-        //else
-        {
-
-            //for (int i = 0; i < 2; i++)
-            //{
-            //    interval::intr3 triangle_intr = toIntr3(internals[currentNode.m_index].aabbs[i]);
-            //    interval::intr3 wi_intr = p_to - triangle_intr;
-            //    interval::intr3 wo_intr = p_from - triangle_intr;
-            //    interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.m_index].normalBounds[i]);
-            //    interval::intr3 R = interval::reflection(wi_intr, normal_intr);
-            //    interval::intr3 c = interval::cross(R, wo_intr);
-
-            //    if (interval::zeroIncluded(c))
-            //    {
-            //        stack.push(internals[currentNode.m_index].children[i]);
-            //    }
-            //}
         }
 
         currentNode = stack.top(); stack.pop();
