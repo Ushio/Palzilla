@@ -631,7 +631,7 @@ int main() {
         }
 #endif
 
-#if 0
+#if 1
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -647,6 +647,17 @@ int main() {
         }
 
         pr::PrimEnd();
+
+        for (int i = 0; i < polygonSoup.triangles.size(); i++)
+        {
+            for (int j = 0; j < 3; j++)
+            {
+                float3 p = polygonSoup.triangles[i].vs[j];
+                float3 n = polygonSoup.triangleAttribs[i].shadingNormals[j];
+
+                DrawLine(to(p), to(p + n * 0.1f), { 255, 0, 255 });
+            }
+        }
 
         static glm::vec3 P0 = { 1, 0.5f, 0 };
         ManipulatePosition(camera, &P0, 0.3f);
@@ -736,13 +747,17 @@ int main() {
         //        }
         //    });
 
+        enum {
+            K = 2
+        };
+        float eta = 1.3f;
         EventDescriptor eDescriptor;
         eDescriptor.set(0, Event::T);
         eDescriptor.set(1, Event::T);
         traverseAdmissibleNodes<2>(
             eDescriptor,
-            1.3f,
-            to(P0), to(P2),
+            eta,
+            to(P0) /*light*/, to(P2),
             deltaPolygonSoup.builder.m_internals.data(),
             deltaPolygonSoup.internalsNormalBound.data(),
             deltaPolygonSoup.triangles.data(),
@@ -752,32 +767,46 @@ int main() {
                 minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
                 minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[admissibleTriangles.indices[1]];
 
-                for (int j = 0; j < 3; ++j)
+                //float3 c0 = (tri0.vs[0] + tri0.vs[1] + tri0.vs[2]) / 3.0f;
+                //float3 c1 = (tri1.vs[0] + tri1.vs[1] + tri1.vs[2]) / 3.0f;
+                //DrawLine(to(c0), to(c1), { 255, 255, 0 }, 3);
+
+                //DrawLine(P0, to(c0), { 255, 255, 0 }, 3);
+                //DrawLine(to(c1), P2, { 255, 255, 0 }, 3);
+
+                minimum_lbvh::Triangle tris[K];
+                TriangleAttrib attribs[K];
+                for (int k = 0; k < K; k++)
                 {
-                    float3 v0 = tri0.vs[j];
-                    float3 v1 = tri0.vs[(j + 1) % 3];
-                    DrawLine(to(v0), to(v1), { 255, 255, 0 }, 3);
+                    int index = admissibleTriangles.indices[k];
+                    tris[k] = deltaPolygonSoup.triangles[index];
+                    attribs[k] = deltaPolygonSoup.triangleAttribs[index];
                 }
 
-                float3 c0 = (tri0.vs[0] + tri0.vs[1] + tri0.vs[2]) / 3.0f;
-                float3 c1 = (tri1.vs[0] + tri1.vs[1] + tri1.vs[2]) / 3.0f;
-                DrawLine(to(c0), to(c1), { 255, 255, 0 }, 3);
+                float parameters[4];
+                bool converged = solveConstraints<K>(parameters, to(P0), to(P2), tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
-                DrawLine(to(c1), P2, { 255, 255, 0 }, 3);
-                DrawLine(P0, to(c0), { 255, 255, 0 }, 3);
+                if (converged)
+                {
+                    bool contributable = contributablePath<K>(
+                        parameters, to(P0), to(P2), tris, attribs, eDescriptor,
+                        polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
 
-                //float3 normal = minimum_lbvh::normalOf(tri);
-                //float3 m = mirror(to(P2), normal, tri.vs[0]);
-                //float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
-                //float t;
-                //float u, v;
-                //float3 ng;
-                //if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
-                //{
-                //    float3 hitP = m + t * rd;
-                //    DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
-                //    DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
-                //}
+                    if (contributable)
+                    {
+                        float d = 0.0f;
+                        float3 prev = to(P0);
+                        for (int k = 0; k < K; k++)
+                        {
+                            float3 e0 = tris[k].vs[1] - tris[k].vs[0];
+                            float3 e1 = tris[k].vs[2] - tris[k].vs[0];
+                            float3 next = tris[k].vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
+                            DrawLine(to(next), to(prev), { 255, 255, 0 }, 3);
+                            prev = next;
+                        }
+                        DrawLine(P2, to(prev), { 255, 255, 0 }, 3);
+                    }
+                }
             });
 #endif 
 
@@ -1155,7 +1184,7 @@ int main() {
 #endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1265,7 +1294,7 @@ int main() {
                 traverseAdmissibleNodes<K>(
                     eDescriptor,
                     1.3f,
-                    p, to(p_light),
+                    to(p_light), p,
                     deltaPolygonSoup.builder.m_internals.data(),
                     deltaPolygonSoup.internalsNormalBound.data(),
                     deltaPolygonSoup.triangles.data(),
@@ -1282,18 +1311,18 @@ int main() {
                         }
 
                         float parameters[4];
-                        bool converged = solveConstraints<K>(parameters, p, to(p_light), tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
+                        bool converged = solveConstraints<K>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
                         if (converged)
                         {
                             bool contributable = contributablePath<K>(
-                                parameters, p, to(p_light), tris, attribs, eDescriptor,
+                                parameters, to(p_light), p, tris, attribs, eDescriptor,
                                 polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
 
                             if (contributable)
                             {
                                 float d = 0.0f;
-                                float3 prev = p;
+                                float3 prev = to(p_light);
                                 for (int k = 0; k < K; k++)
                                 {
                                     float3 e0 = tris[k].vs[1] - tris[k].vs[0];
@@ -1301,11 +1330,11 @@ int main() {
                                     float3 next = tris[k].vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
                                     d += length(next - prev);
                                 }
-                                d += length(to(p_light) - prev);
+                                d += length(p - prev);
 
-                                float3 e0 = tris[0].vs[1] - tris[0].vs[0];
-                                float3 e1 = tris[0].vs[2] - tris[0].vs[0];
-                                float3 firstHit = tris[0].vs[0] + e0 * parameters[0] + e1 * parameters[1];
+                                float3 e0 = tris[1].vs[1] - tris[1].vs[0];
+                                float3 e1 = tris[1].vs[2] - tris[1].vs[0];
+                                float3 firstHit = tris[1].vs[0] + e0 * parameters[2] + e1 * parameters[3];
 
                                 float dAdwValue = d * d;
                                 // float dAdwValue = dAdw(p, firstHit - p, to(p_light), tris, attribs, K);

@@ -481,7 +481,20 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
             {
                 admissibleTriangles.indices[i] = currentNode.nodes[i].m_index;
             }
-            admissibles(admissibleTriangles);
+
+            bool invalid = false;
+            for (int i = 0; i < K - 1; i++)
+            {
+                if (admissibleTriangles.indices[i] == admissibleTriangles.indices[i + 1])
+                {
+                    invalid = true;
+                    break;
+                }
+            }
+            if (invalid == false)
+            {
+                admissibles(admissibleTriangles);
+            }
         }
         else
         {
