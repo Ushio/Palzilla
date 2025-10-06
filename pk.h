@@ -495,7 +495,21 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                 }
                 else
                 {
-                    prev_vert = toIntr3(nodeAABB(internals[currentNode.nodes[cutIndex - 1].m_index]));
+                    minimum_lbvh::NodeIndex prev_node = currentNode.nodes[cutIndex - 1];
+                    if (prev_node.m_isLeaf)
+                    {
+                        minimum_lbvh::AABB bound;
+                        bound.setEmpty();
+                        for (float3 p : tris[prev_node.m_index].vs)
+                        {
+                            bound.extend(p);
+                        }
+                        prev_vert = toIntr3(bound);
+                    }
+                    else
+                    {
+                        prev_vert = toIntr3(nodeAABB(internals[prev_node.m_index]));
+                    }
                 }
 
                 if (cutIndex == K - 1)
@@ -504,12 +518,26 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                 }
                 else
                 {
-                    next_vert = toIntr3(nodeAABB(internals[currentNode.nodes[cutIndex + 1].m_index]));
+                    minimum_lbvh::NodeIndex next_node = currentNode.nodes[cutIndex + 1];
+                    if (next_node.m_isLeaf)
+                    {
+                        minimum_lbvh::AABB bound;
+                        bound.setEmpty();
+                        for (float3 p : tris[next_node.m_index].vs)
+                        {
+                            bound.extend(p);
+                        }
+                        next_vert = toIntr3(bound);
+                    }
+                    else
+                    {
+                        next_vert = toIntr3(nodeAABB(internals[next_node.m_index]));
+                    }
                 }
 
                 interval::intr3 wi_intr = next_vert - triangle_intr;
                 interval::intr3 wo_intr = prev_vert - triangle_intr;
-                interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.nodes[cutIndex].m_index].normalBounds[i]);
+                interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.nodes[cutIndex].m_index].normalBounds[i]); /* this never be leaf */
                 
                 bool admissible = false;
                 if (admissibleEvents.get(cutIndex) == Event::R) // maybe process always later
@@ -524,28 +552,19 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                 }
                 else
                 {
-                    interval::intr3 wi = interval::normalize(wi_intr);
-                    interval::intr3 wo = interval::normalize(wo_intr);
-                    interval::intr3 c0 = interval::cross(normal_intr, wi * eta + wo);
-                    interval::intr3 c1 = interval::cross(normal_intr, wo * eta + wi);
-                    if (interval::zeroIncluded(c0) || interval::zeroIncluded(c1))
+                    interval::intr s = dot(wi_intr, normal_intr) * dot(wo_intr, normal_intr);
+                    if (s.l < 0.0f) // could be T event
                     {
-                        admissible = true;
-                    }
-                    // in order to avoid eta < 1 while both cases, try both.
-                    //interval::intr3 T = interval::refraction_norm_free(wi_intr, normal_intr, eta);
-                    //interval::intr3 Tc = interval::cross(T, wo_intr);
-                    //if (interval::zeroIncluded(Tc))
-                    //{
-                    //    admissible = true;
-                    //}
+                        interval::intr3 wi = interval::normalize(wi_intr);
+                        interval::intr3 wo = interval::normalize(wo_intr);
+                        interval::intr3 n = interval::normalize(normal_intr);
 
-                    //interval::intr3 T_inv = interval::refraction_norm_free(wo_intr, normal_intr, eta);
-                    //interval::intr3 Tc_inv = interval::cross(T_inv, wi_intr);
-                    //if (interval::zeroIncluded(Tc) || interval::zeroIncluded(Tc_inv))
-                    //{
-                    //    admissible = true;
-                    //}
+                        // takes both into account for simplicity
+                        if (interval::intersects(n, wi * eta + wo, 1.0e-7f) || interval::intersects(n, wo * eta + wi, 1.0e-7f))
+                        {
+                            admissible = true;
+                        }
+                    }
                 }
 
                 if (admissible)
@@ -554,7 +573,6 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                     newNodes.nodes[cutIndex] = internals[currentNode.nodes[cutIndex].m_index].children[i];
                     stack.push(newNodes);
                 }
-
             }
         }
 

@@ -702,39 +702,82 @@ int main() {
         minimum_lbvh::NodeIndex currentNode = deltaPolygonSoup.builder.m_rootNode;
 
         // reflection 1 level
-        float parameters[2];
-        EventDescriptor eDescriptor;
-        eDescriptor.set(0, Event::R);
+        //EventDescriptor eDescriptor;
+        //eDescriptor.set(0, Event::R);
 
-        traverseAdmissibleNodes<1>(
+        //traverseAdmissibleNodes<1>(
+        //    eDescriptor,
+        //    1.0f,
+        //    to(P0), to(P2),
+        //    deltaPolygonSoup.builder.m_internals.data(),
+        //    deltaPolygonSoup.internalsNormalBound.data(),
+        //    deltaPolygonSoup.triangles.data(),
+        //    deltaPolygonSoup.triangleAttribs.data(),
+        //    deltaPolygonSoup.builder.m_rootNode,
+        //    [&](AdmissibleTriangles<1> admissibleTriangles) {
+        //        minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
+        //        for (int j = 0; j < 3; ++j)
+        //        {
+        //            float3 v0 = tri.vs[j];
+        //            float3 v1 = tri.vs[(j + 1) % 3];
+        //            DrawLine(to(v0), to(v1), { 255, 255, 0 }, 3);
+        //        }
+        //        float3 normal = minimum_lbvh::normalOf(tri);
+        //        float3 m = mirror(to(P2), normal, tri.vs[0]);
+        //        float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
+        //        float t;
+        //        float u, v;
+        //        float3 ng;
+        //        if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+        //        {
+        //            float3 hitP = m + t * rd;
+        //            DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
+        //            DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
+        //        }
+        //    });
+
+        EventDescriptor eDescriptor;
+        eDescriptor.set(0, Event::T);
+        eDescriptor.set(1, Event::T);
+        traverseAdmissibleNodes<2>(
             eDescriptor,
-            1.0f,
+            1.3f,
             to(P0), to(P2),
             deltaPolygonSoup.builder.m_internals.data(),
             deltaPolygonSoup.internalsNormalBound.data(),
             deltaPolygonSoup.triangles.data(),
             deltaPolygonSoup.triangleAttribs.data(),
             deltaPolygonSoup.builder.m_rootNode,
-            [&](AdmissibleTriangles<1> admissibleTriangles) {
-                minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
+            [&](AdmissibleTriangles<2> admissibleTriangles) {
+                minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
+                minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[admissibleTriangles.indices[1]];
+
                 for (int j = 0; j < 3; ++j)
                 {
-                    float3 v0 = tri.vs[j];
-                    float3 v1 = tri.vs[(j + 1) % 3];
+                    float3 v0 = tri0.vs[j];
+                    float3 v1 = tri0.vs[(j + 1) % 3];
                     DrawLine(to(v0), to(v1), { 255, 255, 0 }, 3);
                 }
-                float3 normal = minimum_lbvh::normalOf(tri);
-                float3 m = mirror(to(P2), normal, tri.vs[0]);
-                float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
-                float t;
-                float u, v;
-                float3 ng;
-                if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
-                {
-                    float3 hitP = m + t * rd;
-                    DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
-                    DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
-                }
+
+                float3 c0 = (tri0.vs[0] + tri0.vs[1] + tri0.vs[2]) / 3.0f;
+                float3 c1 = (tri1.vs[0] + tri1.vs[1] + tri1.vs[2]) / 3.0f;
+                DrawLine(to(c0), to(c1), { 255, 255, 0 }, 3);
+
+                DrawLine(to(c1), P2, { 255, 255, 0 }, 3);
+                DrawLine(P0, to(c0), { 255, 255, 0 }, 3);
+
+                //float3 normal = minimum_lbvh::normalOf(tri);
+                //float3 m = mirror(to(P2), normal, tri.vs[0]);
+                //float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
+                //float t;
+                //float u, v;
+                //float3 ng;
+                //if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+                //{
+                //    float3 hitP = m + t * rd;
+                //    DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
+                //    DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
+                //}
             });
 #endif 
 
