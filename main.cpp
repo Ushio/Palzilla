@@ -631,7 +631,7 @@ int main() {
         }
 #endif
 
-#if 1
+#if 0
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -1155,13 +1155,13 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
-        int stride = 2;
+        int stride = 4;
         Image2DRGBA8 image;
         image.allocate(GetScreenWidth() / stride, GetScreenHeight() / stride);
 
@@ -1216,7 +1216,6 @@ int main() {
 
 #if 0
                 // reflection 1 level
-                float parameters[2];
                 EventDescriptor eDescriptor;
                 eDescriptor.set(0, Event::R);
 
@@ -1233,9 +1232,10 @@ int main() {
                         minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
                         TriangleAttrib attrib = deltaPolygonSoup.triangleAttribs[admissibleTriangles.indices[0]];
 
+                        float parameters[2];
                         bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eta, eDescriptor, 32, 1.0e-10f);
 
-                        if (converged && 0.0f <= parameters[0] && 0.0f <= parameters[1] && parameters[0] + parameters[1] < 1.0f)
+                        if (converged )
                         {
                             bool contributable = contributablePath<1>(
                                 parameters, p, to(p_light), &tri, &attrib, eDescriptor,
@@ -1259,7 +1259,10 @@ int main() {
                 eDescriptor.set(0, Event::T);
                 eDescriptor.set(1, Event::T);
 
-                traverseAdmissibleNodes<2>(
+                enum {
+                    K = 2
+                };
+                traverseAdmissibleNodes<K>(
                     eDescriptor,
                     1.3f,
                     p, to(p_light),
@@ -1268,7 +1271,47 @@ int main() {
                     deltaPolygonSoup.triangles.data(),
                     deltaPolygonSoup.triangleAttribs.data(),
                     deltaPolygonSoup.builder.m_rootNode,
-                    [&](AdmissibleTriangles<2> admissibleTriangles) {
+                    [&](AdmissibleTriangles<K> admissibleTriangles) {
+                        minimum_lbvh::Triangle tris[K];
+                        TriangleAttrib attribs[K];
+                        for (int k = 0; k < K ; k++)
+                        {
+                            int index = admissibleTriangles.indices[k];
+                            tris[k] = deltaPolygonSoup.triangles[index];
+                            attribs[k] = deltaPolygonSoup.triangleAttribs[index];
+                        }
+
+                        float parameters[4];
+                        bool converged = solveConstraints<K>(parameters, p, to(p_light), tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
+
+                        if (converged)
+                        {
+                            bool contributable = contributablePath<K>(
+                                parameters, p, to(p_light), tris, attribs, eDescriptor,
+                                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+
+                            if (contributable)
+                            {
+                                float d = 0.0f;
+                                float3 prev = p;
+                                for (int k = 0; k < K; k++)
+                                {
+                                    float3 e0 = tris[k].vs[1] - tris[k].vs[0];
+                                    float3 e1 = tris[k].vs[2] - tris[k].vs[0];
+                                    float3 next = tris[k].vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
+                                    d += length(next - prev);
+                                }
+                                d += length(to(p_light) - prev);
+
+                                float3 e0 = tris[0].vs[1] - tris[0].vs[0];
+                                float3 e1 = tris[0].vs[2] - tris[0].vs[0];
+                                float3 firstHit = tris[0].vs[0] + e0 * parameters[0] + e1 * parameters[1];
+
+                                float dAdwValue = d * d;
+                                // float dAdwValue = dAdw(p, firstHit - p, to(p_light), tris, attribs, K);
+                                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
+                            }
+                        }
 
                 });
 #endif
