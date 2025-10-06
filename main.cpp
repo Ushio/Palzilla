@@ -631,7 +631,7 @@ int main() {
         }
 #endif
 
-#if 1
+#if 0
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -659,10 +659,12 @@ int main() {
             }
         }
 
-        static glm::vec3 P0 = { 1, 0.5f, 0 };
+        //static glm::vec3 P0 = { 1, 0.5f, 0 };
+        static glm::vec3 P0 = { -0.0187847f, 0.16f, 0.5f };
         ManipulatePosition(camera, &P0, 0.3f);
 
-        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
+        //static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
+        static glm::vec3 P2 = { 0.0443912f, 0.16f, -0.5f };
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
@@ -750,6 +752,7 @@ int main() {
         enum {
             K = 2
         };
+        int index = 0;
         float eta = 1.3f;
         EventDescriptor eDescriptor;
         eDescriptor.set(0, Event::T);
@@ -764,15 +767,30 @@ int main() {
             deltaPolygonSoup.triangleAttribs.data(),
             deltaPolygonSoup.builder.m_rootNode,
             [&](AdmissibleTriangles<2> admissibleTriangles) {
+
+                //if (index++ != 12)
+                //{
+                //    return;
+                //}
+                //admissibleTriangles.indices[0] = 22;
+                //admissibleTriangles.indices[1] = 15;
                 minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
                 minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[admissibleTriangles.indices[1]];
 
+                //if (admissibleTriangles.indices[0] == 22 && admissibleTriangles.indices[1] == 15)
+                ////if (admissibleTriangles.indices[0] == 15 && admissibleTriangles.indices[1] == 22)
+                //{
+                //    printf("");
+                //}
+                //minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[22];
+                //minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[15];
+
                 //float3 c0 = (tri0.vs[0] + tri0.vs[1] + tri0.vs[2]) / 3.0f;
                 //float3 c1 = (tri1.vs[0] + tri1.vs[1] + tri1.vs[2]) / 3.0f;
-                //DrawLine(to(c0), to(c1), { 255, 255, 0 }, 3);
+                //DrawLine(to(c0), to(c1), { 255, 128, 0 }, 3);
 
-                //DrawLine(P0, to(c0), { 255, 255, 0 }, 3);
-                //DrawLine(to(c1), P2, { 255, 255, 0 }, 3);
+                //DrawLine(P0, to(c0), { 255, 128, 0 }, 3);
+                //DrawLine(to(c1), P2, { 255, 128, 0 }, 3);
 
                 minimum_lbvh::Triangle tris[K];
                 TriangleAttrib attribs[K];
@@ -1184,7 +1202,7 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1196,7 +1214,7 @@ int main() {
 
         CameraRayGenerator rayGenerator(GetCurrentViewMatrix(), GetCurrentProjMatrix(), image.width(), image.height());
 
-        float eta = 1.5f;
+        float eta = 1.3f;
 
         //for (int j = 0; j < image.height(); ++j)
         ParallelFor(image.height(), [&](int j) {
@@ -1293,7 +1311,7 @@ int main() {
                 };
                 traverseAdmissibleNodes<K>(
                     eDescriptor,
-                    1.3f,
+                    eta,
                     to(p_light), p,
                     deltaPolygonSoup.builder.m_internals.data(),
                     deltaPolygonSoup.internalsNormalBound.data(),
