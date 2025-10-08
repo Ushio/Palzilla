@@ -587,14 +587,35 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         interval::intr3 wo = interval::normalize(wo_intr);
                         interval::intr3 n = interval::normalize(normal_intr);
 
-                        interval::intr3 ht0 = interval::normalize( wi * eta + wo );
-                        interval::intr3 ht1 = interval::normalize( wo * eta + wi );
+                        //interval::intr3 ht0 = interval::normalize( wi * eta + wo );
+                        //interval::intr3 ht1 = interval::normalize( wo * eta + wi );
 
-                        // takes both into account for simplicity
-                        if (interval::intersects(n, ht0, 1.0e-7f) || interval::intersects(n, ht1, 1.0e-7f) ||
-                            interval::intersects(-n, ht0, 1.0e-7f) || interval::intersects(-n, ht1, 1.0e-7f))
+                        //// takes both into account for simplicity
+                        //if (interval::intersects(n, ht0, 1.0e-7f) || interval::intersects(n, ht1, 1.0e-7f) ||
+                        //    interval::intersects(-n, ht0, 1.0e-7f) || interval::intersects(-n, ht1, 1.0e-7f))
+                        //{
+                        //    admissible = true;
+                        //}
+
+                        if (cutIndex == 0)
                         {
-                            admissible = true;
+                            interval::intr3 ht1 = interval::normalize(wo * eta + wi);
+
+                            if (interval::intersects(n, ht1, 1.0e-7f) ||
+                                interval::intersects(-n, ht1, 1.0e-7f))
+                            {
+                                admissible = true;
+                            }
+                        }
+                        else
+                        {
+                            interval::intr3 ht0 = interval::normalize(wi * eta + wo);
+
+                            if (interval::intersects(n, ht0, 1.0e-7f) ||
+                                interval::intersects(-n, ht0, 1.0e-7f))
+                            {
+                                admissible = true;
+                            }
                         }
                     }
 

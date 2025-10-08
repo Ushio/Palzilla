@@ -185,6 +185,8 @@ int main() {
     archive.open(GetDataPath("assets/scene.abc"), err);
     std::shared_ptr<FScene> scene = archive.readFlat(0, err);
 
+    int debug_index = 0;
+
     // all included
     PolygonSoup polygonSoup;
 
@@ -751,6 +753,8 @@ int main() {
         //        }
         //    });
 
+        int numberOfNewton = 0;
+
         enum {
             K = 2
         };
@@ -769,6 +773,9 @@ int main() {
             deltaPolygonSoup.triangleAttribs.data(),
             deltaPolygonSoup.builder.m_rootNode,
             [&](AdmissibleTriangles<2> admissibleTriangles) {
+                
+
+
 
                 //if (index++ != 12)
                 //{
@@ -778,6 +785,24 @@ int main() {
                 //admissibleTriangles.indices[1] = 15;
                 minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
                 minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[admissibleTriangles.indices[1]];
+
+                if (debug_index == numberOfNewton)
+                {
+                    for (int j = 0; j < 3; ++j)
+                    {
+                        float3 v0 = tri0.vs[j];
+                        float3 v1 = tri0.vs[(j + 1) % 3];
+                        DrawLine(to(v0), to(v1), { 255, 0, 0 }, 4);
+                    }
+                    for (int j = 0; j < 3; ++j)
+                    {
+                        float3 v0 = tri1.vs[j];
+                        float3 v1 = tri1.vs[(j + 1) % 3];
+                        DrawLine(to(v0), to(v1), { 0, 255, 0 }, 2);
+                    }
+                }
+
+                numberOfNewton++;
 
                 //if (admissibleTriangles.indices[0] == 22 && admissibleTriangles.indices[1] == 15)
                 ////if (admissibleTriangles.indices[0] == 15 && admissibleTriangles.indices[1] == 22)
@@ -876,6 +901,8 @@ int main() {
                     }
                 }
             });
+
+            printf("numberOfNewton %d\n", numberOfNewton);
 #endif 
 
 #if 0
@@ -1359,6 +1386,8 @@ int main() {
                 enum {
                     K = 2
                 };
+                int numberOfNewton = 0;
+
                 traverseAdmissibleNodes<K>(
                     eDescriptor,
                     eta,
@@ -1369,6 +1398,8 @@ int main() {
                     deltaPolygonSoup.triangleAttribs.data(),
                     deltaPolygonSoup.builder.m_rootNode,
                     [&](AdmissibleTriangles<K> admissibleTriangles) {
+                        numberOfNewton++;
+
                         minimum_lbvh::Triangle tris[K];
                         TriangleAttrib attribs[K];
                         for (int k = 0; k < K ; k++)
@@ -1413,7 +1444,10 @@ int main() {
                 });
 #endif
 
-                float3 color = clamp(L, 0.0f, 1.0f);
+                // 
+                // glm::vec3 color = viridis(numberOfNewton / 1000.0f);
+
+                //float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 
                     255 * powf(color.x, 1.0f / 2.2f), 
                     255 * powf(color.y, 1.0f / 2.2f), 
@@ -1435,6 +1469,8 @@ int main() {
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
+        ImGui::InputInt("debug_index", &debug_index);
+
         //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
         //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))
