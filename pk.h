@@ -591,8 +591,8 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         interval::intr3 ht1 = interval::normalize( wo * eta + wi );
 
                         // takes both into account for simplicity
-                        if (interval::intersects(n, ht0, 1.0e-7f) || interval::intersects(n, ht0, 1.0e-7f) ||
-                            interval::intersects(-n, ht1, 1.0e-7f) || interval::intersects(-n, ht1, 1.0e-7f))
+                        if (interval::intersects(n, ht0, 1.0e-7f) || interval::intersects(n, ht1, 1.0e-7f) ||
+                            interval::intersects(-n, ht0, 1.0e-7f) || interval::intersects(-n, ht1, 1.0e-7f))
                         {
                             admissible = true;
                         }
