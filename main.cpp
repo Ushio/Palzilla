@@ -631,7 +631,7 @@ int main() {
         }
 #endif
 
-#if 0
+#if 1
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -757,7 +757,7 @@ int main() {
         EventDescriptor eDescriptor;
         eDescriptor.set(0, Event::T);
         eDescriptor.set(1, Event::T);
-        traverseAdmissibleNodes<2>(
+        traverseAdmissibleNodes<K>(
             eDescriptor,
             eta,
             to(P0) /*light*/, to(P2),
@@ -812,17 +812,65 @@ int main() {
 
                     if (contributable)
                     {
-                        float d = 0.0f;
-                        float3 prev = to(P0);
+                        float3 vertices[K + 2];
+                        vertices[0] = to(P0);
+                        vertices[K + 1] = to(P2);
+
                         for (int k = 0; k < K; k++)
                         {
                             float3 e0 = tris[k].vs[1] - tris[k].vs[0];
                             float3 e1 = tris[k].vs[2] - tris[k].vs[0];
                             float3 next = tris[k].vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
-                            DrawLine(to(next), to(prev), { 255, 255, 0 }, 3);
-                            prev = next;
+                            vertices[k + 1] = next;
                         }
-                        DrawLine(P2, to(prev), { 255, 255, 0 }, 3);
+
+                        for (int k = 0; k < K + 1; k++)
+                        {
+                            DrawLine(to(vertices[k]), to(vertices[k + 1]), {255, 255, 0}, 3);
+                        }
+
+                        float3 ro = vertices[0];
+                        float3 rd = vertices[1] - vertices[0];
+
+                        for (int i = 0; i < 3; i++)
+                        {
+                            minimum_lbvh::Hit hit;
+                            minimum_lbvh::intersect_stackfree(&hit, 
+                                deltaPolygonSoup.builder.m_internals.data(), 
+                                deltaPolygonSoup.triangles.data(), 
+                                deltaPolygonSoup.builder.m_rootNode, ro, rd, 
+                                minimum_lbvh::invRd(rd));
+
+                            if (hit.t == MINIMUM_LBVH_FLT_MAX)
+                            {
+                                break;
+                            }
+
+                            TriangleAttrib attrib = deltaPolygonSoup.triangleAttribs[hit.triangleIndex];
+
+                            float3 n =
+                                attrib.shadingNormals[0] +
+                                (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
+                                (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
+
+                            float thisEta = eta;
+                            if (0.0f < dot(n, rd))
+                            {
+                                n = -n;
+                                thisEta = 1.0f / thisEta;
+                            }
+
+
+                            float3 wi = -rd;
+                            float3 wo = refraction_norm_free(wi, n, thisEta);
+
+                            DrawLine(to(ro), to(ro + rd * hit.t), { 255, 0, 0 }, 3);
+
+                            ro = ro + rd * hit.t - normalize(n) * 0.000001f /* T */;
+                            rd = wo;
+
+                            DrawArrow(to(ro), to(ro + rd * 0.2f), 0.003f, {0, 255, 0});
+                        }
                     }
                 }
             });
@@ -1202,13 +1250,13 @@ int main() {
 #endif
 
         // Rendering
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
-        int stride = 4;
+        int stride = 8;
         Image2DRGBA8 image;
         image.allocate(GetScreenWidth() / stride, GetScreenHeight() / stride);
 

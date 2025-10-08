@@ -283,6 +283,19 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
         }
     }
 
+    // check distance
+    float eps = 1.0e-8f;
+    for (int i = 0; i < K + 1; i++)
+    {
+        float3 v0 = vertices[i];
+        float3 v1 = vertices[i + 1];
+        float3 d = v0 - v1;
+        if (dot(d, d) < eps)
+        {
+            return false;
+        }
+    }
+
     // check occlusions
     for (int i = 0; i < K + 1; i++)
     {
