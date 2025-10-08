@@ -585,7 +585,26 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                     {
                         interval::intr3 wi = interval::normalize(wi_intr);
                         interval::intr3 wo = interval::normalize(wo_intr);
-                        interval::intr3 n = interval::normalize(normal_intr);
+                        interval::intr3 ht0 = wi * eta + wo;
+                        interval::intr3 ht1 = wo * eta + wi;
+                        if (interval::zeroIncluded(interval::cross(ht0, normal_intr)) || interval::zeroIncluded(interval::cross(ht1, normal_intr)))
+                        {
+                            admissible = true;
+                        }
+
+                        //interval::intr lengthWi = interval::sqrt( interval::lengthSquared(wi_intr) );
+                        //interval::intr lengthWo = interval::sqrt( interval::lengthSquared(wo_intr) );
+                        //interval::intr3 ht0 = wi_intr * eta * lengthWo + wo_intr * lengthWi;
+                        //interval::intr3 ht1 = wo_intr * eta * lengthWi + wi_intr * lengthWo;
+
+                        //if (interval::zeroIncluded(interval::cross(ht0, normal_intr)) || interval::zeroIncluded(interval::cross(ht1, normal_intr)))
+                        //{
+                        //    admissible = true;
+                        //}
+
+                        //interval::intr3 wi = interval::normalize(wi_intr);
+                        //interval::intr3 wo = interval::normalize(wo_intr);
+                        //interval::intr3 n = interval::normalize(normal_intr);
 
                         //interval::intr3 ht0 = interval::normalize( wi * eta + wo );
                         //interval::intr3 ht1 = interval::normalize( wo * eta + wi );
@@ -597,26 +616,26 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         //    admissible = true;
                         //}
 
-                        if (cutIndex == 0)
-                        {
-                            interval::intr3 ht1 = interval::normalize(wo * eta + wi);
+                        //if (cutIndex == 0)
+                        //{
+                        //    interval::intr3 ht1 = interval::normalize(wo * eta + wi);
 
-                            if (interval::intersects(n, ht1, 1.0e-7f) ||
-                                interval::intersects(-n, ht1, 1.0e-7f))
-                            {
-                                admissible = true;
-                            }
-                        }
-                        else
-                        {
-                            interval::intr3 ht0 = interval::normalize(wi * eta + wo);
+                        //    if (interval::intersects(n, ht1, 1.0e-7f) ||
+                        //        interval::intersects(-n, ht1, 1.0e-7f))
+                        //    {
+                        //        admissible = true;
+                        //    }
+                        //}
+                        //else
+                        //{
+                        //    interval::intr3 ht0 = interval::normalize(wi * eta + wo);
 
-                            if (interval::intersects(n, ht0, 1.0e-7f) ||
-                                interval::intersects(-n, ht0, 1.0e-7f))
-                            {
-                                admissible = true;
-                            }
-                        }
+                        //    if (interval::intersects(n, ht0, 1.0e-7f) ||
+                        //        interval::intersects(-n, ht0, 1.0e-7f))
+                        //    {
+                        //        admissible = true;
+                        //    }
+                        //}
                     }
 
                     if (g_bruteforce)
