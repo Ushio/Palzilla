@@ -11,6 +11,8 @@
 #include "sobol.h"
 #include "pk.h"
 
+bool g_bruteforce = false;
+
 inline void clamp_uv(float* u_inout, float* v_inout, minimum_lbvh::Triangle tri)
 {
     float u = *u_inout;
@@ -660,11 +662,11 @@ int main() {
         }
 
         //static glm::vec3 P0 = { 1, 0.5f, 0 };
-        static glm::vec3 P0 = { -0.0187847f, 0.16f, 0.5f };
+        static glm::vec3 P0 = { -0.0187847f, -0.0271853f, 0.5f };
         ManipulatePosition(camera, &P0, 0.3f);
 
         //static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
-        static glm::vec3 P2 = { 0.0443912f, 0.16f, -0.5f };
+        static glm::vec3 P2 = { 0.0443912f, 0.344693f, -0.5f };
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
@@ -1256,7 +1258,7 @@ int main() {
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
-        int stride = 8;
+        int stride = 4;
         Image2DRGBA8 image;
         image.allocate(GetScreenWidth() / stride, GetScreenHeight() / stride);
 
@@ -1432,7 +1434,7 @@ int main() {
         ImGui::SetNextWindowSize({ 500, 800 }, ImGuiCond_Once);
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
-
+        ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
         //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))

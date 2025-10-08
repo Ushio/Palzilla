@@ -418,6 +418,8 @@ inline minimum_lbvh::AABB nodeAABB(const  minimum_lbvh::InternalNode& node)
     return bounds;
 }
 
+extern bool g_bruteforce;
+
 template <int K, class callback>
 inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta, float3 p_beg, float3 p_end, minimum_lbvh::InternalNode *internals, InternalNormalBound* internalsNormalBound, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, minimum_lbvh::NodeIndex node, callback admissibles )
 {
@@ -594,6 +596,11 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         {
                             admissible = true;
                         }
+                    }
+
+                    if (g_bruteforce)
+                    {
+                        admissible = true;
                     }
                 }
 
