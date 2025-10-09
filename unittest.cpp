@@ -133,7 +133,8 @@ TEST_CASE("refract") {
 
             float R = fresnel_exact_norm_free(wi, n, eta);
 
-            float3 wo = refraction_norm_free(wi, n, eta);
+            float3 wo;
+            REQUIRE( refraction_norm_free(&wo, wi, n, eta) );
 
             float R_inv = fresnel_exact_norm_free(wo, -n, 1.0f / eta);
 

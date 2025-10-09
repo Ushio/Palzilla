@@ -54,13 +54,23 @@ inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / e
     return 0.5f * sqr(GmC / GpC) * (1.0f + sqr((C * GpC - nn * wiwi) / (C * GmC + nn * wiwi)));
 }
 
-inline float3 refraction_norm_free(float3 wi, float3 n, float eta /* = eta_t / eta_i */)
+inline bool refraction_norm_free(float3 *wo, float3 wi, float3 n, float eta /* = eta_t / eta_i */)
 {
     float NoN = dot(n, n);
     float WIoN = dot(wi, n);
+    if (WIoN < 0.0f)
+    {
+        return false;
+    }
+
     float WIoWI = dot(wi, wi);
     float k = NoN * WIoWI * (eta * eta - 1.0f) + WIoN * WIoN;
-    return -wi * NoN + (WIoN - sqrtf(k)) * n;
+    if (k < 0.0f)
+    {
+        return false;
+    }
+    *wo = -wi * NoN + (WIoN - sqrtf(k)) * n;
+    return true;
 }
 
 // Building an Orthonormal Basis, Revisited
@@ -508,8 +518,13 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
             }
             if (invalid == false)
             {
-                bool debug = admissibleTriangles.indices[0] == 13 && admissibleTriangles.indices[1] == 91;
-
+                //bool debug = admissibleTriangles.indices[0] == 13 && admissibleTriangles.indices[1] == 91;
+                bool debug = admissibleTriangles.indices[0] == 25 && admissibleTriangles.indices[1] == 16;
+                if (debug)
+                {
+                    printf("");
+                }
+                
                 interval::intr3 vertices[K + 2];
                 interval::intr3 normals[K];
                 vertices[0] = p_beg_intr;
@@ -537,38 +552,35 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                 }
 
                 bool admissible = true;
-
                 bool inMedium = false;
-                //interval::intr3 wi_intr = vertices[1] - vertices[0];
+                interval::intr3 wi_intr = vertices[0] - vertices[1];
                 for (int k = 0; k < K; k++)
                 {
-                    interval::intr3 wi_intr = vertices[k] - vertices[k + 1];
+                    //interval::intr3 wi_intr = vertices[k] - vertices[k + 1];
 
                     interval::intr3 wo_intr = vertices[k + 2] - vertices[k + 1];
                     interval::intr3 normal_intr = normals[k];
 
-                    interval::intr3 wi = interval::normalize(wi_intr);
-                    interval::intr3 wo = interval::normalize(wo_intr);
+                    //interval::intr3 wi = interval::normalize(wi_intr);
+                    //interval::intr3 wo = interval::normalize(wo_intr);
 
-                    //interval::intr3 wo_next;
-                    //if (inMedium)
-                    //{
-                    //    wo_next = interval::refraction_norm_free(wo_intr, -normal_intr, 1.0f / eta);
-                    //}
-                    //else
-                    //{
-                    //    wo_next = interval::refraction_norm_free(wo_intr, normal_intr, eta);
-                    //}
+                    interval::intr3 wo_next;
+                    if (inMedium)
+                    {
+                        wo_next = interval::refraction_norm_free(wi_intr, -normal_intr, 1.0f / eta);
+                    }
+                    else
+                    {
+                        wo_next = interval::refraction_norm_free(wi_intr, normal_intr, eta);
+                    }
 
-                    //if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
-                    //{
-                    //    admissible = false;
-                    //    break;
-                    //}
-                    //inMedium = !inMedium;
-                    //wi_intr = -wo_next;
-
-
+                    if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
+                    {
+                        admissible = false;
+                        break;
+                    }
+                    inMedium = !inMedium;
+                    wi_intr = -wo_next;
 
                     //refraction_norm_free
 
@@ -587,13 +599,13 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                     //    DrawAABB(interval::make_intr3( center ) + ht0, { 0, 0, 255 }, 1.0f);
                     //}
 
-                    interval::intr3 ht_go_out = wi * eta + wo;
-                    interval::intr3 ht_go_in = wo * eta + wi;
+                    //interval::intr3 ht_go_out = wi * eta + wo;
+                    //interval::intr3 ht_go_in = wo * eta + wi;
 
-                    if (interval::zeroIncluded(interval::cross(ht_go_out, normal_intr)) == false && interval::zeroIncluded(interval::cross(ht_go_in, normal_intr)) == false )
-                    {
-                        admissible = false;
-                    }
+                    //if (interval::zeroIncluded(interval::cross(ht_go_out, normal_intr)) == false && interval::zeroIncluded(interval::cross(ht_go_in, normal_intr)) == false )
+                    //{
+                    //    admissible = false;
+                    //}
                 }
 
                 if (admissible)

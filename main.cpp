@@ -535,7 +535,7 @@ int main() {
 
 #endif
 
-#if 0
+#if 1
         // refraction
         float margin = 0.2f;
         float eta = 2.2f;
@@ -543,22 +543,34 @@ int main() {
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
 
+        //static glm::vec3 P2 = { 0, -1, -1 };
+        //ManipulatePosition(camera, &P2, 0.3f);
+
         static glm::vec3 N = { 0, 1.f, 0 };
         ManipulatePosition(camera, &N, 0.3f);
 
         
         float3 wi_unnormalized = to(P0);
+        //float3 wo_unnormalized = to(P2);
 
         DrawArrow({}, to(wi_unnormalized), 0.01f, { 255, 0, 0 });
+        // DrawArrow({}, to(wo_unnormalized), 0.01f, { 0, 0, 255 });
+
         DrawArrow({}, N, 0.02f, { 0, 255, 255 });
         DrawText(to(wi_unnormalized), "wi(unnormalized)");
         DrawText(N, "N");
 
         interval::intr3 wi_range = interval::relax(interval::make_intr3(wi_unnormalized.x, wi_unnormalized.y, wi_unnormalized.z), margin);
-        interval::intr3 wo_range = interval::refraction_norm_free(wi_range, interval::make_intr3(N), eta);
-
+        interval::intr3 wo_range;
+        
         DrawAABB(wi_range, { 255, 0, 0 }, 1);
-        DrawAABB(wo_range, { 0, 255, 0 }, 1);
+        if (interval::refraction_norm_free(&wo_range, wi_range, interval::make_intr3(N), eta))
+        {
+            DrawAABB(wo_range, { 0, 255, 0 }, 1);
+        }
+
+        //interval::intr3 crs = cross(wo_range, interval::make_intr3(wo_unnormalized));
+        //DrawAABB(crs, { 255, 255, 255 }, 1);
 
         //{
         //    interval::intr NoN = interval::lengthSquared(interval::make_intr3(N));
@@ -571,16 +583,19 @@ int main() {
         //}
 
         // float3 wo = normalize(refraction(wi, normalize(to(N)), eta));
-        float3 wo = normalize(refraction_norm_free(wi_unnormalized, to(N), eta) );
+        float3 wo;
+        if (refraction_norm_free(&wo, wi_unnormalized, to(N), eta))
+        {
+            wo = normalize(wo);
         
-        DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
+            DrawArrow({}, to(wo), 0.02f, { 255, 0, 255 });
 
-        float3 wi = normalize(to(P0));
-        //float3 ht = -(wi + wo * eta);
-        float3 ht = refraction_normal(wi, wo, eta);
+            float3 wi = normalize(to(P0));
+            //float3 ht = -(wi + wo * eta);
+            float3 ht = refraction_normal(wi, wo, eta);
 
-        DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
-
+            DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
+        }
 
         //if (1)
         //{
@@ -619,12 +634,14 @@ int main() {
                     lerp(wi_range.z.l, wi_range.z.u, rng.uniformf()),
                 };
 
-                float3 wo_random = refraction_norm_free(wi_random, to(N), eta);
-                DrawPoint(to(wo_random), { 255, 255, 0 }, 1);
+                float3 wo_random;
+                if (refraction_norm_free(&wo_random, wi_random, to(N), eta))
+                {
+                    DrawPoint(to(wo_random), { 255, 255, 0 }, 1);
 
-                lower = fminf(lower, wo_random);
-                upper = fmaxf(upper, wo_random);
-
+                    lower = fminf(lower, wo_random);
+                    upper = fmaxf(upper, wo_random);
+                }
 
                 //float alpha = dot(wi_random, to(N));
                 //float beta = dot(N, N) * dot(wi_random, wi_random);
@@ -635,7 +652,61 @@ int main() {
         }
 #endif
 
-#if 1
+#if 0
+        pr::PrimBegin(pr::PrimitiveMode::Lines);
+
+        for (auto tri : polygonSoup.triangles)
+        {
+            for (int j = 0; j < 3; ++j)
+            {
+                float3 v0 = tri.vs[j];
+                float3 v1 = tri.vs[(j + 1) % 3];
+                pr::PrimVertex(to(v0), { 255, 255, 255 });
+                pr::PrimVertex(to(v1), { 255, 255, 255 });
+            }
+        }
+
+        pr::PrimEnd();
+
+        minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[13];
+        minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[91];
+        for (int j = 0; j < 3; ++j)
+        {
+            float3 v0 = tri0.vs[j];
+            float3 v1 = tri0.vs[(j + 1) % 3];
+            DrawLine(to(v0), to(v1), { 255, 0, 0 }, 4);
+        }
+        for (int j = 0; j < 3; ++j)
+        {
+            float3 v0 = tri1.vs[j];
+            float3 v1 = tri1.vs[(j + 1) % 3];
+            DrawLine(to(v0), to(v1), { 0, 255, 0 }, 2);
+        }
+
+        minimum_lbvh::AABB bound0;
+        bound0.setEmpty();
+        for (float3 p : tri0.vs)
+        {
+            bound0.extend(p);
+        }
+        interval::intr3 p0_intr = toIntr3(bound0);
+
+        minimum_lbvh::AABB bound1;
+        bound1.setEmpty();
+        for (float3 p : tri1.vs)
+        {
+            bound1.extend(p);
+        }
+        interval::intr3 p1_intr = toIntr3(bound1);
+
+        interval::intr3 wo = p1_intr - p0_intr;
+
+        DrawAABB(wo, {0, 255, 0}, 1);
+
+#endif
+
+
+#if 0
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 

@@ -269,6 +269,34 @@ namespace interval
     //    intr WIoN = dot(wi, n);
     //    intr WIoWI = lengthSquared(wi);
     //    intr k = NoN * WIoWI * (eta * eta - 1.0f) + square(WIoN);
+    //    return -wi * NoN + n * (WIoN - sqrt(k));
+    //}
+    inline bool refraction_norm_free(intr3 *wo, intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
+    {
+        intr NoN = lengthSquared(n);
+        intr WIoN = dot(wi, n);
+
+        if (WIoN.u < 0.0f)
+        {
+            return false;
+        }
+        WIoN.l = ss_max(WIoN.l, 0.0f);
+
+        intr WIoWI = lengthSquared(wi);
+        intr k = NoN * WIoWI * (eta * eta - 1.0f) + square(WIoN);
+        if (k.u < 0.0f)
+        {
+            return false;
+        }
+        k.l = ss_max(k.l, 0.0f);
+        *wo = -wi * NoN + n * (WIoN - sqrt(k));
+    }
+    //inline intr3 refraction_norm_free(intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
+    //{
+    //    intr NoN = lengthSquared(n);
+    //    intr WIoN = dot(wi, n);
+    //    intr WIoWI = lengthSquared(wi);
+    //    intr k = NoN * WIoWI * (eta * eta - 1.0f) + square(WIoN);
 
     //    intr y = (1.0 / eta) * n.y / n.z * wi.x - wi.y;
     //    intr c = (WIoN - sqrt(k));
