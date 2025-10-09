@@ -290,7 +290,26 @@ namespace interval
         }
         k.l = ss_max(k.l, 0.0f);
         *wo = -wi * NoN + n * (WIoN - sqrt(k));
+        return true;
     }
+    //inline bool refraction_norm_free(intr3* wo, intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
+    //{
+    //    intr NoN = lengthSquared(n);
+    //    intr WIoN = dot(wi, n);
+    //    if (WIoN.u < 0.0f)
+    //    {
+    //        return false;
+    //    }
+    //    intr WIoWI = lengthSquared(wi);
+
+    //    intr alpha = WIoN;
+    //    intr beta = NoN * WIoWI;
+
+    //    float g_lower = alpha.l - sqrtf(beta.u * (eta * eta - 1.0f) + alpha.l * alpha.l);
+    //    float g_upper = alpha.u - sqrtf(beta.l * (eta * eta - 1.0f) + alpha.u * alpha.u);
+    //    return -wi * NoN + n * intr{ g_lower, g_upper };
+    //}
+
     //inline intr3 refraction_norm_free(intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
     //{
     //    intr NoN = lengthSquared(n);
