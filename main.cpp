@@ -535,7 +535,7 @@ int main() {
 
 #endif
 
-#if 1
+#if 0
         // refraction
         float margin = 0.2f;
         float eta = 2.2f;
@@ -706,7 +706,7 @@ int main() {
 #endif
 
 
-#if 0
+#if 1
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -960,14 +960,16 @@ int main() {
 
 
                             float3 wi = -rd;
-                            float3 wo = refraction_norm_free(wi, n, thisEta);
+                            float3 wo;
+                            if (refraction_norm_free(&wo, wi, n, thisEta))
+                            {
+                                DrawLine(to(ro), to(ro + rd * hit.t), { 255, 0, 0 }, 3);
 
-                            DrawLine(to(ro), to(ro + rd * hit.t), { 255, 0, 0 }, 3);
+                                ro = ro + rd * hit.t - normalize(n) * 0.000001f /* T */;
+                                rd = wo;
 
-                            ro = ro + rd * hit.t - normalize(n) * 0.000001f /* T */;
-                            rd = wo;
-
-                            DrawArrow(to(ro), to(ro + rd * 0.2f), 0.003f, {0, 255, 0});
+                                DrawArrow(to(ro), to(ro + rd * 0.2f), 0.003f, {0, 255, 0});
+                            }
                         }
                     }
                 }
