@@ -525,68 +525,106 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                 //    printf("");
                 //}
                 
-                interval::intr3 vertices[K + 2];
-                interval::intr3 normals[K];
-                vertices[0] = p_beg_intr;
-                vertices[K + 1] = p_end_intr;
+                //interval::intr3 vertices[K + 2];
+                //interval::intr3 normals[K];
+                //vertices[0] = p_beg_intr;
+                //vertices[K + 1] = p_end_intr;
 
-                for (int k = 0; k < K; k++)
-                {
-                    int index = admissibleTriangles.indices[k];
-                    
-                    minimum_lbvh::AABB bound;
-                    bound.setEmpty();
-                    for (float3 p : tris[index].vs)
-                    {
-                        bound.extend(p);
-                    }
-                    vertices[k + 1] = toIntr3(bound);
+                //for (int k = 0; k < K; k++)
+                //{
+                //    int index = admissibleTriangles.indices[k];
+                //    
+                //    minimum_lbvh::AABB bound;
+                //    bound.setEmpty();
+                //    for (float3 p : tris[index].vs)
+                //    {
+                //        bound.extend(p);
+                //    }
+                //    vertices[k + 1] = toIntr3(bound);
 
-                    minimum_lbvh::AABB nbound;
-                    nbound.setEmpty();
-                    for (float3 p : attribs[index].shadingNormals)
-                    {
-                        nbound.extend(p);
-                    }
-                    normals[k] = toIntr3(nbound);
-                }
+                //    minimum_lbvh::AABB nbound;
+                //    nbound.setEmpty();
+                //    for (float3 p : attribs[index].shadingNormals)
+                //    {
+                //        nbound.extend(p);
+                //    }
+                //    normals[k] = toIntr3(nbound);
+                //}
 
-                bool admissible = true;
-                bool inMedium = false;
-                interval::intr3 wi_intr = vertices[0] - vertices[1];
-                for (int k = 0; k < K; k++)
-                {
-                    interval::intr3 wo_intr = vertices[k + 2] - vertices[k + 1];
-                    interval::intr3 normal_intr = normals[k];
+                //bool admissible = true;
+                //bool inMedium = false;
+                //interval::intr3 wi_intr = vertices[0] - vertices[1];
+                //for (int k = 0; k < K; k++)
+                //{
+                //    interval::intr3 wo_intr = vertices[k + 2] - vertices[k + 1];
+                //    interval::intr3 normal_intr = normals[k];
 
-                    interval::intr3 wo_next;
-                    if (inMedium)
-                    {
-                        if( interval::refraction_norm_free(&wo_next, wi_intr, -normal_intr, 1.0f / eta) == false )
-                        {
-                            admissible = false;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta) == false)
-                        {
-                            admissible = false;
-                            break;
-                        }
-                    }
+                //    interval::intr3 wo_next;
+                //    if (inMedium)
+                //    {
+                //        if( interval::refraction_norm_free(&wo_next, wi_intr, -normal_intr, 1.0f / eta) == false )
+                //        {
+                //            admissible = false;
+                //            break;
+                //        }
+                //    }
+                //    else
+                //    {
+                //        if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta) == false)
+                //        {
+                //            admissible = false;
+                //            break;
+                //        }
+                //    }
 
-                    if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
-                    {
-                        admissible = false;
-                        break;
-                    }
-                    inMedium = !inMedium;
-                    wi_intr = -wo_next;
-                }
+                //    if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
+                //    {
+                //        admissible = false;
+                //        break;
+                //    }
 
-                if (admissible)
+                //    inMedium = !inMedium;
+                //    wi_intr = -wo_next;
+                //}
+
+                //std::reverse(vertices, vertices + 4);
+                //std::reverse(normals, normals + 2);
+
+                //wi_intr = vertices[0] - vertices[1];
+                //for (int k = 0; k < K; k++)
+                //{
+                //    interval::intr3 wo_intr = vertices[k + 2] - vertices[k + 1];
+                //    interval::intr3 normal_intr = normals[k];
+
+                //    interval::intr3 wo_next;
+                //    if (inMedium)
+                //    {
+                //        if (interval::refraction_norm_free(&wo_next, wi_intr, -normal_intr, 1.0f / eta) == false)
+                //        {
+                //            admissible = false;
+                //            break;
+                //        }
+                //    }
+                //    else
+                //    {
+                //        if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta) == false)
+                //        {
+                //            admissible = false;
+                //            break;
+                //        }
+                //    }
+
+                //    if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
+                //    {
+                //        admissible = false;
+                //        break;
+                //    }
+
+                //    inMedium = !inMedium;
+                //    wi_intr = -wo_next;
+                //}
+
+                //if (admissible)
                 {
                     admissibles(admissibleTriangles);
                 }
@@ -596,6 +634,7 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
         {
             for (int i = 0; i < 2; i++)
             {
+#if 0
                 interval::intr3 triangle_intr = toIntr3(internals[currentNode.nodes[cutIndex].m_index].aabbs[i]);
                 interval::intr3 prev_vert, next_vert;
                 if (cutIndex == 0)
@@ -672,51 +711,6 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         {
                             admissible = true;
                         }
-
-                        //interval::intr lengthWi = interval::sqrt( interval::lengthSquared(wi_intr) );
-                        //interval::intr lengthWo = interval::sqrt( interval::lengthSquared(wo_intr) );
-                        //interval::intr3 ht0 = wi_intr * eta * lengthWo + wo_intr * lengthWi;
-                        //interval::intr3 ht1 = wo_intr * eta * lengthWi + wi_intr * lengthWo;
-
-                        //if (interval::zeroIncluded(interval::cross(ht0, normal_intr)) || interval::zeroIncluded(interval::cross(ht1, normal_intr)))
-                        //{
-                        //    admissible = true;
-                        //}
-
-                        //interval::intr3 wi = interval::normalize(wi_intr);
-                        //interval::intr3 wo = interval::normalize(wo_intr);
-                        //interval::intr3 n = interval::normalize(normal_intr);
-
-                        //interval::intr3 ht0 = interval::normalize( wi * eta + wo );
-                        //interval::intr3 ht1 = interval::normalize( wo * eta + wi );
-
-                        //// takes both into account for simplicity
-                        //if (interval::intersects(n, ht0, 1.0e-7f) || interval::intersects(n, ht1, 1.0e-7f) ||
-                        //    interval::intersects(-n, ht0, 1.0e-7f) || interval::intersects(-n, ht1, 1.0e-7f))
-                        //{
-                        //    admissible = true;
-                        //}
-
-                        //if (cutIndex == 0)
-                        //{
-                        //    interval::intr3 ht1 = interval::normalize(wo * eta + wi);
-
-                        //    if (interval::intersects(n, ht1, 1.0e-7f) ||
-                        //        interval::intersects(-n, ht1, 1.0e-7f))
-                        //    {
-                        //        admissible = true;
-                        //    }
-                        //}
-                        //else
-                        //{
-                        //    interval::intr3 ht0 = interval::normalize(wi * eta + wo);
-
-                        //    if (interval::intersects(n, ht0, 1.0e-7f) ||
-                        //        interval::intersects(-n, ht0, 1.0e-7f))
-                        //    {
-                        //        admissible = true;
-                        //    }
-                        //}
                     }
 
                     if (g_bruteforce)
@@ -724,6 +718,115 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         admissible = true;
                     }
                 }
+#else
+
+                interval::intr3 vertices[K + 2];
+                interval::intr3 normals[K];
+                vertices[0] = p_beg_intr;
+                vertices[K + 1] = p_end_intr;
+
+                for (int k = 0; k < K; k++)
+                {
+                    minimum_lbvh::NodeIndex node = currentNode.nodes[k];
+
+                    if (k == cutIndex)
+                    {
+                        // node is always internal node
+                        vertices[k + 1] = toIntr3(internals[node.m_index].aabbs[i]); 
+                        normals[k] = toIntr3(internalsNormalBound[node.m_index].normalBounds[i]);
+                    }
+                    else if(node.m_isLeaf)
+                    {
+                        minimum_lbvh::AABB bound;
+                        bound.setEmpty();
+                        for (float3 p : tris[node.m_index].vs)
+                        {
+                            bound.extend(p);
+                        }
+                        vertices[k + 1] = toIntr3(bound);
+
+                        minimum_lbvh::AABB nbound;
+                        nbound.setEmpty();
+                        for (float3 p : attribs[node.m_index].shadingNormals)
+                        {
+                            nbound.extend(p);
+                        }
+                        normals[k] = toIntr3(nbound);
+                    }
+                    else
+                    {
+                        vertices[k + 1] = toIntr3(nodeAABB(internals[node.m_index]));
+
+                        minimum_lbvh::AABB nbound;
+                        nbound.setEmpty();
+                        nbound.extend(internalsNormalBound[node.m_index].normalBounds[0]);
+                        nbound.extend(internalsNormalBound[node.m_index].normalBounds[1]);
+                        normals[k] = toIntr3(nbound);
+                    }
+                }
+
+                bool admissible = true;
+                bool inMedium = false;
+                interval::intr3 wi_intr = vertices[0] - vertices[1];
+                for (int k = 0; k < K; k++)
+                {
+                    interval::intr3 wo_intr = vertices[k + 2] - vertices[k + 1];
+                    interval::intr3 normal_intr = normals[k];
+
+                    interval::intr3 wo_next;
+
+                    if (admissibleEvents.get(cutIndex) == Event::R) // maybe process always later
+                    {
+
+                    }
+                    else
+                    {
+                        interval::intr3 wi = interval::normalize(vertices[k] - vertices[k + 1]);
+                        interval::intr3 wo = interval::normalize(wo_intr);
+
+                        if (inMedium)
+                        {
+                            interval::intr3 ht = wi * eta + wo;
+                            if (interval::zeroIncluded(interval::cross(ht, normal_intr)) == false)
+                            {
+                                admissible = false;
+                                break;
+                            }
+
+                            if (interval::refraction_norm_free(&wo_next, wi_intr, -normal_intr, 1.0f / eta) == false)
+                            {
+                                admissible = false;
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            interval::intr3 ht = wo * eta + wi;
+                            if (interval::zeroIncluded(interval::cross(ht, normal_intr)) == false)
+                            {
+                                admissible = false;
+                                break;
+                            }
+
+                            if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta) == false)
+                            {
+                                admissible = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
+                    {
+                        admissible = false;
+                        break;
+                    }
+
+                    inMedium = !inMedium;
+                    wi_intr = -wo_next;
+                }
+
+#endif
 
                 if (admissible)
                 {

@@ -300,14 +300,33 @@ namespace interval
     //    {
     //        return false;
     //    }
+    //    WIoN.l = ss_max(WIoN.l, 0.0f);
+
     //    intr WIoWI = lengthSquared(wi);
 
     //    intr alpha = WIoN;
     //    intr beta = NoN * WIoWI;
 
-    //    float g_lower = alpha.l - sqrtf(beta.u * (eta * eta - 1.0f) + alpha.l * alpha.l);
-    //    float g_upper = alpha.u - sqrtf(beta.l * (eta * eta - 1.0f) + alpha.u * alpha.u);
-    //    return -wi * NoN + n * intr{ g_lower, g_upper };
+    //    if (eta < 1.0f)
+    //    {
+    //        return refraction_norm_free_n(wo, wi, n, eta);
+    //    }
+    //    else
+    //    {
+    //        float k_upper = beta.u * (eta * eta - 1.0f) + alpha.l * alpha.l;
+    //        float k_lower = beta.l * (eta * eta - 1.0f) + alpha.u * alpha.u;
+    //        if (k_upper < 0.0f)
+    //        {
+    //            return false;
+    //        }
+    //        k_lower = ss_max(k_lower, 0.0f);
+
+    //        float g_lower = alpha.l - sqrtf(k_upper);
+    //        float g_upper = alpha.u - sqrtf(k_lower);
+    //        *wo = -wi * NoN + n * intr{ g_lower, g_upper };
+    //    }
+
+    //    return true;
     //}
 
     //inline intr3 refraction_norm_free(intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
