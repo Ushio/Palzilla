@@ -688,7 +688,7 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                 interval::intr3 normal_intr = toIntr3(internalsNormalBound[currentNode.nodes[cutIndex].m_index].normalBounds[i]); /* this never be leaf */
                 
                 bool admissible = false;
-                if (admissibleEvents.get(cutIndex) == Event::R) // maybe process always later
+                if (admissibleEvents.get(k) == Event::R) // maybe process always later
                 {
                     interval::intr3 R = interval::reflection(wi_intr, normal_intr);
                     interval::intr3 Rc = interval::cross(R, wo_intr);
@@ -775,7 +775,7 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
 
                     interval::intr3 wo_next;
 
-                    if (admissibleEvents.get(cutIndex) == Event::R) // maybe process always later
+                    if (admissibleEvents.get(k) == Event::R) // maybe process always later
                     {
 
                     }
