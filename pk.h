@@ -210,6 +210,15 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
             parameters[i] = parameters[i] - dparams(i, 0);
         }
 
+        // extreme values can be rejected earlier
+        for (int i = 0; i < nParameters; i++)
+        {
+            if (parameters[i] < -1.0f || 2.0f < parameters[i])
+            {
+                return false;
+            }
+        }
+
         end_of_iter(iter, iter == maxIterations - 1);
     }
     return false;
