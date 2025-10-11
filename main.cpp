@@ -185,7 +185,7 @@ int main() {
     archive.open(GetDataPath("assets/scene.abc"), err);
     std::shared_ptr<FScene> scene = archive.readFlat(0, err);
 
-    int debug_index = 0;
+    int debug_index = 10;
 
     // all included
     PolygonSoup polygonSoup;
@@ -538,7 +538,7 @@ int main() {
 #if 0
         // refraction
         float margin = 0.2f;
-        float eta = 2.2f;
+        float eta = 1.5f;
 
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
@@ -650,6 +650,81 @@ int main() {
 
             DrawAABB(to(lower), to(upper), { 0, 0, 255 }, 3);
         }
+#endif
+
+#if 0
+        // bad combnation
+        interval::intr3 normal_intr = {
+            {0.12053682, 0.56806499},
+            {0.00000000, 0.00000000},
+            {0.82298380, 0.99270892},
+        };
+        interval::intr3 wi_intr = {
+            {-0.19645604, 0.17189293},
+            {-0.31899956, -0.09029689},
+            {0.16791520, 0.79100788},
+        };
+        interval::intr3 wo_intr = {
+            {-0.08950565, 0.17589265},
+            {0.11333331, 0.22666666},
+            {-0.19854178, 0.03394502},
+        };
+
+        DrawAABB(normal_intr, { 0, 255, 0 }, 1);
+        DrawAABB(wi_intr, { 255, 0, 0 }, 1);
+        DrawAABB(wo_intr, { 0, 0, 255 }, 1);
+
+        float eta = 1.3f;
+        interval::intr3 wo_next;
+        if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta))
+        {
+            DrawAABB(wo_next, { 255, 255, 0 }, 2);
+        }
+
+        //interval::intr3 ht = wo_intr * eta + wi_intr;
+        //DrawAABB(ht, { 255, 255, 255 }, 2);
+
+        PCG rng;
+
+        auto randomOf = [](interval::intr3 r, PCG& rng)
+        {
+            return float3 {
+                lerp(r.x.l, r.x.u, rng.uniformf()),
+                lerp(r.y.l, r.y.u, rng.uniformf()),
+                lerp(r.z.l, r.z.u, rng.uniformf()),
+            };
+        };
+
+        for (int i = 0; i < 50000; i++)
+        {
+            float3 wi_random = randomOf(wi_intr, rng);
+            float3 n_random = randomOf(normal_intr, rng);
+
+            float3 wo;
+            if (refraction_norm_free(&wo, wi_random, n_random, eta))
+            {
+                pr::DrawPoint(to(wo), { 0, 255, 255 }, 2);
+            }
+        }
+
+        //minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[25];
+        //minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[91];
+
+        //PCG pcg;
+
+        //for (int i = 0; i < 100000; i++)
+        //{
+        //    float2 params = { pcg.uniformf() , pcg.uniformf() };
+        //    params = square2triangle(params);
+        //    float3 p0 = tri0.vs[0] + (tri0.vs[1] - tri0.vs[0]) * params.x + (tri0.vs[2] - tri0.vs[0]) * params.y;
+
+        //    params = { pcg.uniformf(), pcg.uniformf() };
+        //    params = square2triangle(params);
+        //    float3 p1 = tri1.vs[0] + (tri1.vs[1] - tri1.vs[0]) * params.x + (tri1.vs[2] - tri1.vs[0]) * params.y;
+
+        //    float3 wo = p1 - p0;
+        //    pr::DrawPoint(to(wo), { 0, 255, 255 }, 2);
+        //}
 #endif
 
 #if 0
@@ -846,6 +921,11 @@ int main() {
             [&](AdmissibleTriangles<2> admissibleTriangles) {
                 
 
+                //bool debug = admissibleTriangles.indices[0] == 25 && admissibleTriangles.indices[1] == 91;
+                //if (debug)
+                //{
+                //    printf("");
+                //}
 
 
                 //if (index++ != 12)

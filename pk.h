@@ -428,6 +428,13 @@ inline minimum_lbvh::AABB nodeAABB(const  minimum_lbvh::InternalNode& node)
     return bounds;
 }
 
+inline void dump(interval::intr3 v)
+{
+    printf("{%.8f, %.8f},\n", v.x.l, v.x.u);
+    printf("{%.8f, %.8f},\n", v.y.l, v.y.u);
+    printf("{%.8f, %.8f},\n", v.z.l, v.z.u);
+}
+
 extern bool g_bruteforce;
 
 template <int K, class callback>
@@ -516,76 +523,127 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                     break;
                 }
             }
+
+            // Geometric constraints at beg and end when mesh is closed
+            {
+                int index_beg = admissibleTriangles.indices[0];
+                minimum_lbvh::Triangle tri_beg = tris[index_beg];
+                float3 ng = minimum_lbvh::unnormalizedNormalOf(tri_beg);
+
+                // light weight winding correction
+                ng *= dot(ng, attribs[index_beg].shadingNormals[0]);
+
+                if (dot(ng, p_beg) < dot(ng, tri_beg.vs[0]))
+                {
+                    invalid = true;
+                }
+            }
+            {
+                int index_end = admissibleTriangles.indices[K - 1];
+                minimum_lbvh::Triangle tri_end = tris[index_end];
+                float3 ng = minimum_lbvh::unnormalizedNormalOf(tri_end);
+
+                // light weight winding correction
+                ng *= dot(ng, attribs[index_end].shadingNormals[0]);
+
+                if (dot(ng, p_end) < dot(ng, tri_end.vs[0]))
+                {
+                    invalid = true;
+                }
+            }
+
             if (invalid == false)
             {
                 //bool debug = admissibleTriangles.indices[0] == 13 && admissibleTriangles.indices[1] == 91;
-                //bool debug = admissibleTriangles.indices[0] == 25 && admissibleTriangles.indices[1] == 16;
-                //if (debug)
-                //{
-                //    printf("");
-                //}
+                bool debug = admissibleTriangles.indices[0] == 25 && admissibleTriangles.indices[1] == 91;
+                if (debug)
+                {
+                    printf("");
+                }
                 
-                //interval::intr3 vertices[K + 2];
-                //interval::intr3 normals[K];
-                //vertices[0] = p_beg_intr;
-                //vertices[K + 1] = p_end_intr;
+                interval::intr3 vertices[K + 2];
+                interval::intr3 normals[K];
+                vertices[0] = p_beg_intr;
+                vertices[K + 1] = p_end_intr;
 
-                //for (int k = 0; k < K; k++)
-                //{
-                //    int index = admissibleTriangles.indices[k];
-                //    
-                //    minimum_lbvh::AABB bound;
-                //    bound.setEmpty();
-                //    for (float3 p : tris[index].vs)
-                //    {
-                //        bound.extend(p);
-                //    }
-                //    vertices[k + 1] = toIntr3(bound);
+                for (int k = 0; k < K; k++)
+                {
+                    int index = admissibleTriangles.indices[k];
+                    
+                    minimum_lbvh::AABB bound;
+                    bound.setEmpty();
+                    for (float3 p : tris[index].vs)
+                    {
+                        bound.extend(p);
+                    }
+                    vertices[k + 1] = toIntr3(bound);
 
-                //    minimum_lbvh::AABB nbound;
-                //    nbound.setEmpty();
-                //    for (float3 p : attribs[index].shadingNormals)
-                //    {
-                //        nbound.extend(p);
-                //    }
-                //    normals[k] = toIntr3(nbound);
-                //}
+                    minimum_lbvh::AABB nbound;
+                    nbound.setEmpty();
+                    for (float3 p : attribs[index].shadingNormals)
+                    {
+                        nbound.extend(p);
+                    }
+                    normals[k] = toIntr3(nbound);
+                }
 
-                //bool admissible = true;
-                //bool inMedium = false;
-                //interval::intr3 wi_intr = vertices[0] - vertices[1];
-                //for (int k = 0; k < K; k++)
-                //{
-                //    interval::intr3 wo_intr = vertices[k + 2] - vertices[k + 1];
-                //    interval::intr3 normal_intr = normals[k];
+                bool admissible = true;
+                bool inMedium = false;
+                interval::intr3 wi_intr = vertices[0] - vertices[1];
+                for (int k = 0; k < K; k++)
+                {
+                    interval::intr3 wo_intr = vertices[k + 2] - vertices[k + 1];
+                    interval::intr3 normal_intr = normals[k];
 
-                //    interval::intr3 wo_next;
-                //    if (inMedium)
-                //    {
-                //        if( interval::refraction_norm_free(&wo_next, wi_intr, -normal_intr, 1.0f / eta) == false )
-                //        {
-                //            admissible = false;
-                //            break;
-                //        }
-                //    }
-                //    else
-                //    {
-                //        if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta) == false)
-                //        {
-                //            admissible = false;
-                //            break;
-                //        }
-                //    }
+                    interval::intr3 wo_next;
+                    if (inMedium)
+                    {
+                        if( interval::refraction_norm_free(&wo_next, wi_intr, -normal_intr, 1.0f / eta) == false )
+                        {
+                            admissible = false;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta) == false)
+                        {
+                            admissible = false;
+                            break;
+                        }
+                    }
 
-                //    if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
-                //    {
-                //        admissible = false;
-                //        break;
-                //    }
+                    if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
+                    {
+                        admissible = false;
+                        break;
+                    }
 
-                //    inMedium = !inMedium;
-                //    wi_intr = -wo_next;
-                //}
+                    inMedium = !inMedium;
+                    wi_intr = -wo_next;
+
+                    if (debug)
+                    {
+                        auto DrawAABB = [](interval::intr3 bound, glm::u8vec3 c, float lineWidth)
+                        {
+                            pr::DrawAABB({ bound.x.l, bound.y.l, bound.z.l }, { bound.x.u, bound.y.u, bound.z.u }, c, lineWidth);
+                        };
+
+                        //if (k == 0)
+                        //{
+
+                        //    DrawAABB(vertices[k + 1], { 255, 0, 0 }, 2);
+                        //    DrawAABB(vertices[k + 2], { 0, 255, 0 }, 2);
+                        //}
+
+                        //if (k == 0)
+                        //{
+                        //    dump(normal_intr);
+                        //    dump(wi_intr);
+                        //    dump(wo_intr);
+                        //}
+                    }
+                }
 
                 //std::reverse(vertices, vertices + 4);
                 //std::reverse(normals, normals + 2);
