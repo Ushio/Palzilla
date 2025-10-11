@@ -351,13 +351,18 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
             minimum_lbvh::Triangle tri = tris[j];
             TriangleAttrib attrib = attribs[j];
 
-            float3 ng = minimum_lbvh::normalOf(tri);
+            float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
 
             saka::dval3 p = intersect_p_ray_plane(ro_j, rd_j, saka::make_dval3(ng), saka::make_dval3(tri.vs[0]));
 
-            saka::dval u = dot(p - saka::make_dval3(tri.vs[1]), saka::make_dval3(cross(ng, tri.vs[1] - tri.vs[0]))) * 0.5f;
-            saka::dval w = dot(p - saka::make_dval3(tri.vs[2]), saka::make_dval3(cross(ng, tri.vs[2] - tri.vs[1]))) * 0.5f;
-            saka::dval v = dot(p - saka::make_dval3(tri.vs[0]), saka::make_dval3(cross(ng, tri.vs[0] - tri.vs[2]))) * 0.5f;
+            saka::dval v = dot(p - saka::make_dval3(tri.vs[1]), saka::make_dval3(cross(ng, tri.vs[1] - tri.vs[0])));
+            saka::dval w = dot(p - saka::make_dval3(tri.vs[2]), saka::make_dval3(cross(ng, tri.vs[2] - tri.vs[1])));
+            saka::dval u = dot(p - saka::make_dval3(tri.vs[0]), saka::make_dval3(cross(ng, tri.vs[0] - tri.vs[2])));
+
+            saka::dval area = u + v + w;
+            u = u / area;
+            v = v / area;
+            w = w / area;
 
             saka::dval3 n =
                 saka::make_dval3(attrib.shadingNormals[0]) * w +
