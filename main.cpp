@@ -809,11 +809,11 @@ int main() {
         //    }
         //}
 
-        static glm::vec3 P0 = { 1, 0.5f, 0 };
-        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
+        //static glm::vec3 P0 = { 1, 0.5f, 0 };
+        //static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
 
-        //static glm::vec3 P0 = { -0.0187847f, -0.0271853f, 0.5f };
-        //static glm::vec3 P2 = { 0.0443912f, 0.344693f, -0.5f };
+        static glm::vec3 P0 = { -0.0187847f, -0.0271853f, 0.5f };
+        static glm::vec3 P2 = { 0.0443912f, 0.344693f, -0.5f };
         ManipulatePosition(camera, &P0, 0.3f);
         ManipulatePosition(camera, &P2, 0.3f);
 
@@ -864,7 +864,7 @@ int main() {
         stack.push(minimum_lbvh::NodeIndex::invalid());
         minimum_lbvh::NodeIndex currentNode = deltaPolygonSoup.builder.m_rootNode;
 
-#if 1
+#if 0
         // reflection 1 level
         EventDescriptor eDescriptor;
         eDescriptor.set(0, Event::R);
@@ -907,7 +907,7 @@ int main() {
         printf("numberOfNewton %d\n", numberOfNewton);
 #endif
 
-#if 0
+#if 1
         int numberOfNewton = 0;
 
         enum {
