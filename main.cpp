@@ -798,23 +798,23 @@ int main() {
 
         pr::PrimEnd();
 
-        for (int i = 0; i < polygonSoup.triangles.size(); i++)
-        {
-            for (int j = 0; j < 3; j++)
-            {
-                float3 p = polygonSoup.triangles[i].vs[j];
-                float3 n = polygonSoup.triangleAttribs[i].shadingNormals[j];
+        //for (int i = 0; i < polygonSoup.triangles.size(); i++)
+        //{
+        //    for (int j = 0; j < 3; j++)
+        //    {
+        //        float3 p = polygonSoup.triangles[i].vs[j];
+        //        float3 n = polygonSoup.triangleAttribs[i].shadingNormals[j];
 
-                DrawLine(to(p), to(p + n * 0.1f), { 255, 0, 255 });
-            }
-        }
+        //        DrawLine(to(p), to(p + n * 0.1f), { 255, 0, 255 });
+        //    }
+        //}
 
-        //static glm::vec3 P0 = { 1, 0.5f, 0 };
-        static glm::vec3 P0 = { -0.0187847f, -0.0271853f, 0.5f };
+        static glm::vec3 P0 = { 1, 0.5f, 0 };
+        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
+
+        //static glm::vec3 P0 = { -0.0187847f, -0.0271853f, 0.5f };
+        //static glm::vec3 P2 = { 0.0443912f, 0.344693f, -0.5f };
         ManipulatePosition(camera, &P0, 0.3f);
-
-        //static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
-        static glm::vec3 P2 = { 0.0443912f, 0.344693f, -0.5f };
         ManipulatePosition(camera, &P2, 0.3f);
 
         DrawText(P0, "P0");
@@ -864,41 +864,50 @@ int main() {
         stack.push(minimum_lbvh::NodeIndex::invalid());
         minimum_lbvh::NodeIndex currentNode = deltaPolygonSoup.builder.m_rootNode;
 
+#if 1
         // reflection 1 level
-        //EventDescriptor eDescriptor;
-        //eDescriptor.set(0, Event::R);
+        EventDescriptor eDescriptor;
+        eDescriptor.set(0, Event::R);
 
-        //traverseAdmissibleNodes<1>(
-        //    eDescriptor,
-        //    1.0f,
-        //    to(P0), to(P2),
-        //    deltaPolygonSoup.builder.m_internals.data(),
-        //    deltaPolygonSoup.internalsNormalBound.data(),
-        //    deltaPolygonSoup.triangles.data(),
-        //    deltaPolygonSoup.triangleAttribs.data(),
-        //    deltaPolygonSoup.builder.m_rootNode,
-        //    [&](AdmissibleTriangles<1> admissibleTriangles) {
-        //        minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
-        //        for (int j = 0; j < 3; ++j)
-        //        {
-        //            float3 v0 = tri.vs[j];
-        //            float3 v1 = tri.vs[(j + 1) % 3];
-        //            DrawLine(to(v0), to(v1), { 255, 255, 0 }, 3);
-        //        }
-        //        float3 normal = minimum_lbvh::normalOf(tri);
-        //        float3 m = mirror(to(P2), normal, tri.vs[0]);
-        //        float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
-        //        float t;
-        //        float u, v;
-        //        float3 ng;
-        //        if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
-        //        {
-        //            float3 hitP = m + t * rd;
-        //            DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
-        //            DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
-        //        }
-        //    });
+        int numberOfNewton = 0;
 
+        traverseAdmissibleNodes<1>(
+            eDescriptor,
+            1.0f,
+            to(P0), to(P2),
+            deltaPolygonSoup.builder.m_internals.data(),
+            deltaPolygonSoup.internalsNormalBound.data(),
+            deltaPolygonSoup.triangles.data(),
+            deltaPolygonSoup.triangleAttribs.data(),
+            deltaPolygonSoup.builder.m_rootNode,
+            [&](AdmissibleTriangles<1> admissibleTriangles) {
+                minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
+                for (int j = 0; j < 3; ++j)
+                {
+                    float3 v0 = tri.vs[j];
+                    float3 v1 = tri.vs[(j + 1) % 3];
+                    DrawLine(to(v0), to(v1), { 255, 255, 0 }, 3);
+                }
+                float3 normal = minimum_lbvh::normalOf(tri);
+                float3 m = mirror(to(P2), normal, tri.vs[0]);
+                float3 rd = make_float3(P0.x, P0.y, P0.z) - m;
+                float t;
+                float u, v;
+                float3 ng;
+                if (minimum_lbvh::intersectRayTriangle(&t, &u, &v, &ng, 0.0f, MINIMUM_LBVH_FLT_MAX, m, rd, tri.vs[0], tri.vs[1], tri.vs[2]))
+                {
+                    float3 hitP = m + t * rd;
+                    DrawLine(P0, to(hitP), { 255, 0, 0 }, 3);
+                    DrawLine(P2, to(hitP), { 255, 0, 0 }, 3);
+                }
+
+                numberOfNewton++;
+
+            });
+        printf("numberOfNewton %d\n", numberOfNewton);
+#endif
+
+#if 0
         int numberOfNewton = 0;
 
         enum {
@@ -1056,6 +1065,9 @@ int main() {
             });
 
             printf("numberOfNewton %d\n", numberOfNewton);
+#endif
+
+
 #endif 
 
 #if 0
@@ -1491,7 +1503,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 0
+#if 1
                 // reflection 1 level
                 EventDescriptor eDescriptor;
                 eDescriptor.set(0, Event::R);
@@ -1524,7 +1536,8 @@ int main() {
                                 float3 e0 = firstTri.vs[1] - firstTri.vs[0];
                                 float3 e1 = firstTri.vs[2] - firstTri.vs[0];
                                 float3 firstHit = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
-
+                                
+                                //float dAdwValue = 1.0f;
                                 float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, 1);
                                 L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
                             }
@@ -1600,7 +1613,7 @@ int main() {
                 // 
                 // glm::vec3 color = viridis(numberOfNewton / 1000.0f);
 
-                //float3 color = clamp(L, 0.0f, 1.0f);
+                float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 
                     255 * powf(color.x, 1.0f / 2.2f), 
                     255 * powf(color.y, 1.0f / 2.2f), 

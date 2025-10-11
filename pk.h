@@ -380,9 +380,9 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
         saka::dval3 p_final = intersect_p_ray_plane(ro_j, rd_j, saka::make_dval3(p_last - p_end), saka::make_dval3(p_end));
         dAxis[i] = { p_final.x.g,  p_final.y.g,  p_final.z.g };
 
-        //printf("x %.5f %.5f\n", p_final.x.v, p_light.x);
-        //printf("y %.5f %.5f\n", p_final.y.v, p_light.y);
-        //printf("z %.5f %.5f\n", p_final.z.v, p_light.z);
+        //printf("x %.5f %.5f\n", p_final.x.v, p_end.x);
+        //printf("y %.5f %.5f\n", p_final.y.v, p_end.y);
+        //printf("z %.5f %.5f\n", p_final.z.v, p_end.z);
     }
     float3 crs = cross(dAxis[0], dAxis[1]);
     float dAdwValue = sqrtf(fmaxf(dot(crs, crs), 1.0e-15f));
@@ -840,7 +840,17 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
 
                     if (admissibleEvents.get(k) == Event::R) // maybe process always later
                     {
+                        wo_next = interval::reflection(wi_intr, normal_intr);
 
+                        //interval::intr3 wi = interval::normalize(vertices[k] - vertices[k + 1]);
+                        //interval::intr3 wo = interval::normalize(wo_intr);
+
+                        //interval::intr3 h = wi + wo;
+                        //if (interval::zeroIncluded(interval::cross(h, normal_intr)) == false)
+                        //{
+                        //    admissible = false;
+                        //    break;
+                        //}
                     }
                     else
                     {
@@ -888,7 +898,6 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                     inMedium = !inMedium;
                     wi_intr = -wo_next;
                 }
-
 #endif
 
                 if (admissible)
