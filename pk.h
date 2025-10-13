@@ -330,7 +330,15 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
     return true;
 }
 
-inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, int nEvent)
+inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[])
+{
+    minimum_lbvh::Triangle tri = tris[k];
+    float3 e0 = tri.vs[1] - tri.vs[0];
+    float3 e1 = tri.vs[2] - tri.vs[0];
+    return tri.vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
+}
+
+inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, EventDescriptor eDescriptor, int nEvent, float eta )
 {
     rd = normalize(rd);
 
@@ -354,6 +362,8 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
         saka::dval3 rd_j = saka::make_dval3(rd)
             + saka::make_dval3(rd + T0) * differentials[0]
             + saka::make_dval3(rd + T1) * differentials[1];
+
+        bool inMedium = false;
 
         for (int j = 0; j < nEvent; j++)
         {
@@ -379,7 +389,24 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
                 saka::make_dval3(attrib.shadingNormals[2]) * v;
 
             saka::dval3 wi = -rd_j;
-            saka::dval3 wo = saka::reflection(wi, n);
+
+            saka::dval3 wo;
+            if (eDescriptor.get(j) == Event::T)
+            {
+                if (inMedium)
+                {
+                    wo = saka::refraction_norm_free(wi, -n, 1.0f / eta);
+                }
+                else
+                {
+                    wo = saka::refraction_norm_free(wi, n, eta);
+                }
+                inMedium = !inMedium;
+            }
+            else
+            {
+                wo = saka::reflection(wi, n);
+            }
 
             ro_j = p;
             rd_j = wo;
@@ -394,7 +421,7 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
         //printf("z %.5f %.5f\n", p_final.z.v, p_end.z);
     }
     float3 crs = cross(dAxis[0], dAxis[1]);
-    float dAdwValue = sqrtf(fmaxf(dot(crs, crs), 1.0e-15f));
+    float dAdwValue = sqrtf(fmaxf(dot(crs, crs), 1.0e-9f));
     return dAdwValue;
 }
 

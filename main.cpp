@@ -1583,7 +1583,7 @@ int main() {
                                 float3 firstHit = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
                                 
                                 //float dAdwValue = 1.0f;
-                                float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, 1);
+                                float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, eDescriptor, 1, eta);
                                 L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
                             }
                         }
@@ -1631,24 +1631,8 @@ int main() {
 
                             if (contributable)
                             {
-                                float d = 0.0f;
-                                float3 prev = to(p_light);
-                                for (int k = 0; k < K; k++)
-                                {
-                                    float3 e0 = tris[k].vs[1] - tris[k].vs[0];
-                                    float3 e1 = tris[k].vs[2] - tris[k].vs[0];
-                                    float3 next = tris[k].vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
-                                    d += length(next - prev);
-                                }
-                                d += length(p - prev);
-
-                                float3 e0 = tris[1].vs[1] - tris[1].vs[0];
-                                float3 e1 = tris[1].vs[2] - tris[1].vs[0];
-                                float3 firstHit = tris[1].vs[0] + e0 * parameters[2] + e1 * parameters[3];
-
-                                float dAdwValue = d * d;
-                                // float dAdwValue = dAdw(p, firstHit - p, to(p_light), tris, attribs, K);
-                                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
+                                float dAdwValue = dAdw(to(p_light), getVertex(0, tris, parameters) - to(p_light), p, tris, attribs, eDescriptor, K, eta);
+                                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
                             }
                         }
 

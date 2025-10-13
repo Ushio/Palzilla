@@ -187,6 +187,10 @@ namespace saka
         saka::dval WIoN = dot(wi, n);
         saka::dval WoW = dot(wi, wi);
         saka::dval k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
+        if (k.v < 0.0f)
+        {
+            k.v = 0.0f;
+        }
         return -wi * NoN + n * (WIoN - sqrt(k));
     }
 }
