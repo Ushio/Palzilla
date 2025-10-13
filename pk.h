@@ -420,8 +420,14 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
         //printf("y %.5f %.5f\n", p_final.y.v, p_end.y);
         //printf("z %.5f %.5f\n", p_final.z.v, p_end.z);
     }
-    float3 crs = cross(dAxis[0], dAxis[1]);
-    float dAdwValue = sqrtf(fmaxf(dot(crs, crs), 1.0e-9f));
+
+    float len0 = length(dAxis[0]);
+    float len1 = length(dAxis[1]);
+    float sinTheta = length( cross(dAxis[0] / len0, dAxis[1] / len1) );
+    float dAdwValue = len0 * len1 * fmaxf(sinTheta, 0.01f);
+
+    //float3 crs = cross(dAxis[0], dAxis[1]);
+    //float dAdwValue = sqrtf(fmaxf(dot(crs, crs), 1.0e-9f));
     return dAdwValue;
 }
 
