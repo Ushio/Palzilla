@@ -1505,6 +1505,152 @@ int main() {
 
         Stopwatch sw;
 
+        // pre pass
+        enum {
+            MAX_PATH_LENGTH = 8,
+            MAX_PATH_CACHE_COUNT = 512,
+            RAYS_PER_TRI = 16,
+        };
+
+        struct TrianglePath {
+            uint32_t hashes[MAX_PATH_CACHE_COUNT];
+            int pathes[MAX_PATH_CACHE_COUNT][MAX_PATH_LENGTH];
+        };
+
+        std::vector<TrianglePath> pathCache(polygonSoup.triangles.size());
+        for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
+        {
+            for (int i = 0; i < MAX_PATH_CACHE_COUNT ; i++)
+            {
+                pathCache[iTri].hashes[i] = 0;
+            }
+        }
+
+        // ray trace
+        enum {
+            K = 1
+        };
+        EventDescriptor eDescriptor;
+        eDescriptor.set(0, Event::R);
+
+        for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
+        {
+            minimum_lbvh::Triangle tri = polygonSoup.triangles[iTri];
+            if (polygonSoup.triangleAttribs[iTri].material == Material::Diffuse)
+            {
+                continue;
+            }
+
+            for (int j = 0; j < RAYS_PER_TRI; j++)
+            {
+                float2 params = {};
+                sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j, 123, 456, 789);
+                params = square2triangle(params);
+
+                float3 e0 = tri.vs[1] - tri.vs[0];
+                float3 e1 = tri.vs[2] - tri.vs[0];
+                float3 p = tri.vs[0] + e0 * params.x + e1 * params.y;
+
+                float3 ro = to(p_light);
+                float3 rd = p - to(p_light);
+
+                bool admissiblePath = false;
+                int tris[K];
+                int cacheTo = -1;
+                float3 p_final;
+                for (int d = 0; d < K + 1; d++)
+                {
+                    minimum_lbvh::Hit hit;
+                    minimum_lbvh::intersect_stackfree(&hit, polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, ro, rd, minimum_lbvh::invRd(rd));
+                    if (hit.t == MINIMUM_LBVH_FLT_MAX)
+                    {
+                        break;
+                    }
+                    TriangleAttrib attrib = polygonSoup.triangleAttribs[hit.triangleIndex];
+                    Material m = attrib.material;
+                    float3 p_hit = ro + rd * hit.t;
+
+                    float3 ns =
+                        attrib.shadingNormals[0] +
+                        (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
+                        (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
+                    float3 ng = dot(ns, hit.ng) < 0.0f ? -hit.ng : hit.ng; // aligned
+
+                    if ( d == K )
+                    {
+                        if ( m == Material::Diffuse )
+                        {
+                            // store 
+                            admissiblePath = true;
+                            cacheTo = hit.triangleIndex;
+                            p_final = p_hit;
+                            // DrawPoint(to(p_hit), { 255, 0, 0 }, 2);
+                        }
+                        break;
+                    }
+                    if ( eDescriptor.get(d) == Event::R && (m == Material::Mirror || m == Material::Dielectric ))
+                    {
+                        tris[d] = hit.triangleIndex;
+
+                        float3 wi = -rd;
+                        float3 wo = reflection(wi, ns);
+
+                        if (dot(ng, wi) * dot(ng, wo)) // geometrically admissible
+                        {
+                            DrawPoint(to(p_hit), { 0, 255, 0 }, 4);
+
+                            float3 ng_norm = normalize(ng);
+                            ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                            rd = wo;
+                            continue;
+                        }
+                    }
+                    if (eDescriptor.get(d) == Event::T && m == Material::Dielectric )
+                    {
+                        tris[d] = hit.triangleIndex;
+
+                        continue;
+                    }
+                    break;
+                }
+
+                if (admissiblePath)
+                {
+                    uint32_t hashVal = 123;
+                    for (int d = 0; d < K; d++)
+                    {
+                        hashVal = minimum_lbvh::hashPCG(hashVal + tris[d]);
+                    }
+                    hashVal |= 1u;
+
+                    for (int iPath = 0; iPath < MAX_PATH_CACHE_COUNT; iPath++)
+                    {
+                        if (pathCache[cacheTo].hashes[iPath] == 0)
+                        {
+                            // store
+                            pathCache[cacheTo].hashes[iPath] = hashVal;
+                            for (int d = 0; d < K; d++)
+                            {
+                                pathCache[cacheTo].pathes[iPath][d] = tris[d];
+                            }
+                            //DrawPoint(to(p_final), { 255, 255, 0 }, 2);
+                            break;
+                        }
+                        else if(pathCache[cacheTo].hashes[iPath] == hashVal)
+                        {
+                            //DrawPoint(to(p_final), { 255, 0, 255 }, 2);
+                            break; // skip known path
+                        }
+
+                        if (iPath == MAX_PATH_CACHE_COUNT - 1)
+                        {
+                            abort();
+                        }
+                    }
+                }
+            }
+        }
+
         //for (int j = 0; j < image.height(); ++j)
         ParallelFor(image.height(), [&](int j) {
             for (int i = 0; i < image.width(); ++i)
@@ -1552,44 +1698,81 @@ int main() {
 
 #if 1
                 // reflection 1 level
-                EventDescriptor eDescriptor;
-                eDescriptor.set(0, Event::R);
+                //EventDescriptor eDescriptor;
+                //eDescriptor.set(0, Event::R);
 
-                traverseAdmissibleNodes<1>(
-                    eDescriptor,
-                    1.0f,
-                    p, to(p_light),
-                    deltaPolygonSoup.builder.m_internals.data(),
-                    deltaPolygonSoup.internalsNormalBound.data(),
-                    deltaPolygonSoup.triangles.data(),
-                    deltaPolygonSoup.triangleAttribs.data(),
-                    deltaPolygonSoup.builder.m_rootNode, 
-                    [&](AdmissibleTriangles<1> admissibleTriangles) {
-                        minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
-                        TriangleAttrib attrib = deltaPolygonSoup.triangleAttribs[admissibleTriangles.indices[0]];
+                //traverseAdmissibleNodes<1>(
+                //    eDescriptor,
+                //    1.0f,
+                //    p, to(p_light),
+                //    deltaPolygonSoup.builder.m_internals.data(),
+                //    deltaPolygonSoup.internalsNormalBound.data(),
+                //    deltaPolygonSoup.triangles.data(),
+                //    deltaPolygonSoup.triangleAttribs.data(),
+                //    deltaPolygonSoup.builder.m_rootNode, 
+                //    [&](AdmissibleTriangles<1> admissibleTriangles) {
+                //        minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
+                //        TriangleAttrib attrib = deltaPolygonSoup.triangleAttribs[admissibleTriangles.indices[0]];
 
-                        float parameters[2];
-                        bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eta, eDescriptor, 32, 1.0e-10f);
+                //        float parameters[2];
+                //        bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eta, eDescriptor, 32, 1.0e-10f);
 
-                        if (converged )
+                //        if (converged )
+                //        {
+                //            bool contributable = contributablePath<1>(
+                //                parameters, p, to(p_light), &tri, &attrib, eDescriptor,
+                //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+
+                //            if (contributable)
+                //            {
+                //                minimum_lbvh::Triangle firstTri = tri;
+                //                float3 e0 = firstTri.vs[1] - firstTri.vs[0];
+                //                float3 e1 = firstTri.vs[2] - firstTri.vs[0];
+                //                float3 firstHit = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
+                //                
+                //                //float dAdwValue = 1.0f;
+                //                float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, eDescriptor, 1, eta);
+                //                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
+                //            }
+                //        }
+                //    });
+
+                int nSample = 0;
+                for (int iPath = 0; iPath < MAX_PATH_CACHE_COUNT; iPath++)
+                {
+                    if (pathCache[hit.triangleIndex].hashes[iPath] == 0)
+                        break;
+
+                    minimum_lbvh::Triangle tris[K];
+                    TriangleAttrib attribs[K];
+                    for (int k = 0; k < K; k++)
+                    {
+                        int index = pathCache[hit.triangleIndex].pathes[iPath][k];
+                        tris[k] = polygonSoup.triangles[index];
+                        attribs[k] = polygonSoup.triangleAttribs[index];
+                    }
+
+                    float parameters[K * 2];
+                    bool converged = solveConstraints<1>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
+
+                    if (converged)
+                    {
+                        nSample++;
+
+                        bool contributable = contributablePath<1>(
+                            parameters, to(p_light), p, tris, attribs, eDescriptor,
+                            polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+
+                        if (contributable)
                         {
-                            bool contributable = contributablePath<1>(
-                                parameters, p, to(p_light), &tri, &attrib, eDescriptor,
-                                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+                            float3 firstHit = getVertex(0, tris, parameters);
 
-                            if (contributable)
-                            {
-                                minimum_lbvh::Triangle firstTri = tri;
-                                float3 e0 = firstTri.vs[1] - firstTri.vs[0];
-                                float3 e1 = firstTri.vs[2] - firstTri.vs[0];
-                                float3 firstHit = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
-                                
-                                //float dAdwValue = 1.0f;
-                                float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, eDescriptor, 1, eta);
-                                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
-                            }
+                            float dAdwValue = dAdw(to(p_light), firstHit - to(p_light), p, tris, attribs, eDescriptor, 1, eta);
+                            L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
                         }
-                    });
+                    }
+                }
+
 #else
                 // refraction 2 levels
                 EventDescriptor eDescriptor;
