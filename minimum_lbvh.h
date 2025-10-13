@@ -555,7 +555,10 @@ namespace minimum_lbvh
 					// mortons[i].morton = (pMorton & 0xFFFFFFC0) | (nMorton >> 26);
 
 					// normal is prioritized
-					mortons[i].morton = (nMorton & 0xFFFFFFC0) | (pMorton >> 26);
+					// mortons[i].morton = (nMorton & 0xFFFFFFC0) | (pMorton >> 26);
+					mortons[i].morton = (nMorton & 0xFC000000) | (pMorton >> 6);
+					
+					//mortons[i].morton = encode32Morton2D(nMorton >> 16, pMorton >> 16);
 				}
 				else
 				{
