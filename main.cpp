@@ -1507,9 +1507,9 @@ int main() {
 
         // pre pass
         enum {
-            MAX_PATH_LENGTH = 8,
+            MAX_PATH_LENGTH = 4,
             MAX_PATH_CACHE_COUNT = 2048 * 2,
-            RAYS_PER_TRI = 256,
+            RAYS_PER_TRI = 32,
         };
 
         struct TrianglePath {

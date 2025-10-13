@@ -4,6 +4,8 @@
 #include "sen.h"
 #include "minimum_lbvh.h"
 
+#define MIN_VERTEX_DIST 1.0e-4f
+
 enum class Material
 {
     Diffuse,
@@ -303,7 +305,7 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
     }
 
     // check distance
-    float eps = 1.0e-8f;
+    float eps = MIN_VERTEX_DIST;
     for (int i = 0; i < K + 1; i++)
     {
         float3 v0 = vertices[i];
