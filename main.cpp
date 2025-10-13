@@ -1495,13 +1495,15 @@ int main() {
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
-        int stride = 4;
+        int stride = 2;
         Image2DRGBA8 image;
         image.allocate(GetScreenWidth() / stride, GetScreenHeight() / stride);
 
         CameraRayGenerator rayGenerator(GetCurrentViewMatrix(), GetCurrentProjMatrix(), image.width(), image.height());
 
         float eta = 1.3f;
+
+        Stopwatch sw;
 
         //for (int j = 0; j < image.height(); ++j)
         ParallelFor(image.height(), [&](int j) {
@@ -1548,7 +1550,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 0
+#if 1
                 // reflection 1 level
                 EventDescriptor eDescriptor;
                 eDescriptor.set(0, Event::R);
@@ -1650,6 +1652,8 @@ int main() {
             };
         }
         );
+
+        printf("e %f\n", sw.elapsed());
 
         texture->upload(image);
 
