@@ -250,6 +250,130 @@ namespace interval
             m31 * wi.x + m32 * wi.y + m33 * wi.z
         };
     }
+
+    inline intr3 refraction_normal(intr3 wi, intr3 wo, float eta /* = eta_t / eta_i */)
+    {
+        interval::intr lenWi = sqrt(interval::lengthSquared(wi));
+        interval::intr lenWo = sqrt(interval::lengthSquared(wo));
+        return -(wo * lenWi * eta + wi * lenWo);
+    }
+
+    inline intr3 refraction_normal_tight(intr3 wi, intr3 wo, float eta /* = eta_t / eta_i */)
+    {
+        interval::intr lenWi = sqrt(interval::lengthSquared(wi));
+        interval::intr lenWo = sqrt(interval::lengthSquared(wo));
+
+        interval::intr3 ht = -(wo * lenWi * eta + wi * lenWo);
+
+        interval::intr lenWi_lenWo = lenWi * lenWo;
+
+        // d ht.x / d wi.z
+        // d ht.y / d wi.z
+        // d ht.z / d wi.z
+        interval::intr dhx_dwix = -lenWi_lenWo - wi.x * wo.x * eta;
+        interval::intr dhy_dwiy = -lenWi_lenWo - wi.y * wo.y * eta;
+        interval::intr dhz_dwiz = -lenWi_lenWo - wi.z * wo.z * eta;
+
+        // d ht.x / d wo.x
+        // d ht.y / d wo.y
+        // d ht.z / d wo.z
+        interval::intr dhx_dwox = -eta * lenWi_lenWo - wi.x * wo.x;
+        interval::intr dhy_dwoy = -eta * lenWi_lenWo - wi.y * wo.y;
+        interval::intr dhz_dwoz = -eta * lenWi_lenWo - wi.z * wo.z;
+
+
+        // x bound lower
+        {
+            intr3 wi_bounded = wi;
+            intr3 wo_bounded = wo;
+
+            if (dhx_dwox.u < 0.0f) // negative monotonic
+            {
+                wo_bounded.x = wo.x.u;
+            }
+            if (dhx_dwix.u < 0.0f) // negative monotonic
+            {
+                wi_bounded.x = wi.x.u;
+            }
+            ht.x.l = refraction_normal(wi_bounded, wo_bounded, eta).x.l;
+        }
+        {
+            intr3 wi_bounded = wi;
+            intr3 wo_bounded = wo;
+
+            if (dhx_dwox.u < 0.0f) // negative monotonic
+            {
+                wo_bounded.x = wo.x.l;
+            }
+            if (dhx_dwix.u < 0.0f) // negative monotonic
+            {
+                wi_bounded.x = wi.x.l;
+            }
+            ht.x.u = refraction_normal(wi_bounded, wo_bounded, eta).x.u;
+        }
+
+        // y bound lower
+        {
+            intr3 wi_bounded = wi;
+            intr3 wo_bounded = wo;
+
+            if (dhy_dwoy.u < 0.0f) // negative monotonic
+            {
+                wo_bounded.y = wo.y.u;
+            }
+            if (dhy_dwiy.u < 0.0f) // negative monotonic
+            {
+                wi_bounded.y = wi.y.u;
+            }
+            ht.y.l = refraction_normal(wi_bounded, wo_bounded, eta).y.l;
+        }
+        {
+            intr3 wi_bounded = wi;
+            intr3 wo_bounded = wo;
+
+            if (dhy_dwoy.u < 0.0f) // negative monotonic
+            {
+                wo_bounded.y = wo.y.l;
+            }
+            if (dhy_dwiy.u < 0.0f) // negative monotonic
+            {
+                wi_bounded.y = wi.y.l;
+            }
+            ht.y.u = refraction_normal(wi_bounded, wo_bounded, eta).y.u;
+        }
+
+        // z bound lower
+        {
+            intr3 wi_bounded = wi;
+            intr3 wo_bounded = wo;
+
+            if (dhz_dwoz.u < 0.0f) // negative monotonic
+            {
+                wo_bounded.z = wo.z.u;
+            }
+            if (dhz_dwiz.u < 0.0f) // negative monotonic
+            {
+                wi_bounded.z = wi.z.u;
+            }
+            ht.z.l = refraction_normal(wi_bounded, wo_bounded, eta).z.l;
+        }
+        {
+            intr3 wi_bounded = wi;
+            intr3 wo_bounded = wo;
+
+            if (dhz_dwoz.u < 0.0f) // negative monotonic
+            {
+                wo_bounded.z = wo.z.l;
+            }
+            if (dhz_dwiz.u < 0.0f) // negative monotonic
+            {
+                wi_bounded.z = wi.z.l;
+            }
+            ht.z.u = refraction_normal(wi_bounded, wo_bounded, eta).z.u;
+        }
+
+        return ht;
+    }
     //inline intr3 refraction_norm_free(intr3 wi, intr3 n, float eta /* = eta_t / eta_i */)
     //{
     //    intr NoN = lengthSquared(n);

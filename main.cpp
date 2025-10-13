@@ -653,78 +653,123 @@ int main() {
 #endif
 
 #if 0
-        // bad combnation
-        interval::intr3 normal_intr = {
-            {0.12053682, 0.56806499},
-            {0.00000000, 0.00000000},
-            {0.82298380, 0.99270892},
-        };
-        interval::intr3 wi_intr = {
-            {-0.19645604, 0.17189293},
-            {-0.31899956, -0.09029689},
-            {0.16791520, 0.79100788},
-        };
-        interval::intr3 wo_intr = {
-            {-0.08950565, 0.17589265},
-            {0.11333331, 0.22666666},
-            {-0.19854178, 0.03394502},
-        };
+        float margin = 0.1f;
+        float eta = 1.5f;
 
-        DrawAABB(normal_intr, { 0, 255, 0 }, 1);
-        DrawAABB(wi_intr, { 255, 0, 0 }, 1);
-        DrawAABB(wo_intr, { 0, 0, 255 }, 1);
+        static glm::vec3 P0 = { 0, 1, 1 };
+        ManipulatePosition(camera, &P0, 0.3f);
+        DrawText(P0, "wi");
 
-        float eta = 1.3f;
-        interval::intr3 wo_next;
-        if (interval::refraction_norm_free(&wo_next, wi_intr, normal_intr, eta))
+        static glm::vec3 P2 = { 0, -1, -0.506008 };
+        ManipulatePosition(camera, &P2, 0.3f);
+        DrawText(P2, "wi");
+
+        interval::intr3 wi = interval::relax(interval::make_intr3(P0), margin);
+        interval::intr3 wo = interval::relax(interval::make_intr3(P2), margin);
+
+        DrawAABB(wi, { 255, 0, 0 }, 2);
+        DrawAABB(wo, { 0, 255, 0}, 2);
+
+        interval::intr lenWi = sqrt(interval::lengthSquared(wi));
+        interval::intr lenWo = sqrt(interval::lengthSquared(wo));
+        
+        //interval::intr3 ht = refraction_normal(wi, wo, wieta);
+        interval::intr3 ht = -( wo * lenWi * eta + wi * lenWo );
+
         {
-            DrawAABB(wo_next, { 255, 255, 0 }, 2);
-        }
+            interval::intr dx =
+                -eta * sqrt(interval::lengthSquared(wi)) *
+                sqrt(interval::lengthSquared(wo)) - wi.x * wo.x;
 
-        //interval::intr3 ht = wo_intr * eta + wi_intr;
-        //DrawAABB(ht, { 255, 255, 255 }, 2);
+            interval::intr dy =
+                -eta * sqrt(interval::lengthSquared(wi)) *
+                sqrt(interval::lengthSquared(wo)) - wi.y * wo.y;
+
+            interval::intr dz =
+                -eta * sqrt(interval::lengthSquared(wi)) *
+                sqrt(interval::lengthSquared(wo)) - wi.z * wo.z;
+
+            interval::intr da =
+                -sqrt(interval::lengthSquared(wi)) *
+                sqrt(interval::lengthSquared(wo)) - wi.z * wo.z * eta;
+
+            // float lx = wo.x.l * lenWi.u * eta + wi.x.l * lenWo.u;
+
+            //float lx = 
+            //    - wo.x.u * (0.0f < -wo.x.u ? lenWi.l : lenWi.u) * eta + (-wi.x).l * sqrt(
+            //        wo.x.u * wo.x.u + 
+            //        ( 0.0f < (-wi.x).l ?
+            //        wo.y.l * wo.y.l + wo.z.l * wo.z.l:
+            //        wo.y.u * wo.y.u + wo.z.u * wo.z.u )
+            //    );
+            //printf("%f %f\n", dx.l, dx.u);
+            //printf("%f %f\n", dy.l, dy.u);
+            //printf("%f %f\n", dz.l, dz.u);
+
+            //{
+            //    auto wo_fixed = wo;
+            //    wo_fixed.x = wo.x.u;
+            //    interval::intr3 ht_limited = -(wo_fixed * lenWi * eta + wi * sqrt(interval::lengthSquared(wo_fixed)));
+            //    ht.x.l = ht_limited.x.l;
+            //}
+
+            //{
+            //    auto wo_fixed = wo;
+            //    wo_fixed.y = wo.y.u;
+            //    interval::intr3 ht_limited = -(wo_fixed * lenWi * eta + wi * sqrt(interval::lengthSquared(wo_fixed)));
+            //    ht.y.l = ht_limited.y.l;
+            //}
+            //{
+            //    auto wi_fixed = wi;
+            //    wi_fixed.z = wi.z.u;
+
+            //    auto wo_fixed = wo;
+            //    wo_fixed.z = wo.z.u;
+            //    //interval::intr3 ht_limited = -(wo_fixed * lenWi * eta + wi * sqrt(interval::lengthSquared(wo_fixed)));
+            //    interval::intr3 ht_limited = -(wo_fixed * sqrt(interval::lengthSquared(wi_fixed)) * eta + wi_fixed * sqrt(interval::lengthSquared(wo_fixed)));
+            //    ht.z.l = ht_limited.z.l;
+            //}
+
+            interval::intr3 ht_tight = refraction_normal_tight(wi, wo, eta);
+            DrawAABB(ht_tight, { 0, 0, 255 }, 2);
+            printf("");
+        }
+        DrawAABB(ht, { 0, 255, 255 }, 2);
 
         PCG rng;
-
-        auto randomOf = [](interval::intr3 r, PCG& rng)
-        {
-            return float3 {
+        auto random_of = [&rng](interval::intr3 r) -> float3 {
+            return {
                 lerp(r.x.l, r.x.u, rng.uniformf()),
                 lerp(r.y.l, r.y.u, rng.uniformf()),
                 lerp(r.z.l, r.z.u, rng.uniformf()),
             };
         };
 
-        for (int i = 0; i < 50000; i++)
+        PrimBegin(PrimitiveMode::Points, 2);
+        for (int i = 0; i < 100000; i++)
         {
-            float3 wi_random = randomOf(wi_intr, rng);
-            float3 n_random = randomOf(normal_intr, rng);
+            float3 wi_r = random_of(wi);
+            float3 wo_r = random_of(wo);
+            float lenWi = length(wi_r);
+            float lenWo = length(wo_r);
 
-            float3 wo;
-            if (refraction_norm_free(&wo, wi_random, n_random, eta))
+            float3 ht = -(wo_r * lenWi * eta + wi_r * lenWo);
+            
+            float k = dot(ht, ht) * dot(wi_r, wi_r) * (eta * eta - 1.0f) + dot(ht, wi_r) * dot(ht, wi_r);
+            //if (i == 0)
+            //{
+            //    printf("s %f\n", dot(ht, wi_r) * dot(ht, wo_r));
+            //}
+
+            if (dot(ht, wi_r) * dot(ht, wo_r) < 0.0f)
             {
-                pr::DrawPoint(to(wo), { 0, 255, 255 }, 2);
+                PrimVertex(to(ht), { 255, 0, 0 });
+                // DrawPoint(to(ht), {255, 0, 0}, 3);
             }
+
         }
+        PrimEnd();
 
-        //minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[25];
-        //minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[91];
-
-        //PCG pcg;
-
-        //for (int i = 0; i < 100000; i++)
-        //{
-        //    float2 params = { pcg.uniformf() , pcg.uniformf() };
-        //    params = square2triangle(params);
-        //    float3 p0 = tri0.vs[0] + (tri0.vs[1] - tri0.vs[0]) * params.x + (tri0.vs[2] - tri0.vs[0]) * params.y;
-
-        //    params = { pcg.uniformf(), pcg.uniformf() };
-        //    params = square2triangle(params);
-        //    float3 p1 = tri1.vs[0] + (tri1.vs[1] - tri1.vs[0]) * params.x + (tri1.vs[2] - tri1.vs[0]) * params.y;
-
-        //    float3 wo = p1 - p0;
-        //    pr::DrawPoint(to(wo), { 0, 255, 255 }, 2);
-        //}
 #endif
 
 #if 0
@@ -781,7 +826,7 @@ int main() {
 #endif
 
 
-#if 1
+#if 0
         // test with mesh
         pr::PrimBegin(pr::PrimitiveMode::Lines);
 
@@ -1444,7 +1489,7 @@ int main() {
 #endif
 
         // Rendering
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
@@ -1503,7 +1548,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 1
+#if 0
                 // reflection 1 level
                 EventDescriptor eDescriptor;
                 eDescriptor.set(0, Event::R);

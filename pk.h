@@ -850,26 +850,15 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                     if (admissibleEvents.get(k) == Event::R) // maybe process always later
                     {
                         wo_next = interval::reflection(wi_intr, normal_intr);
-
-                        //interval::intr3 wi = interval::normalize(vertices[k] - vertices[k + 1]);
-                        //interval::intr3 wo = interval::normalize(wo_intr);
-
-                        //interval::intr3 h = wi + wo;
-                        //if (interval::zeroIncluded(interval::cross(h, normal_intr)) == false)
-                        //{
-                        //    admissible = false;
-                        //    break;
-                        //}
                     }
                     else
                     {
-                        interval::intr3 wi = interval::normalize(vertices[k] - vertices[k + 1]);
-                        interval::intr3 wo = interval::normalize(wo_intr);
-
                         if (inMedium)
                         {
-                            interval::intr3 ht = wi * eta + wo;
-                            if (interval::zeroIncluded(interval::cross(ht, normal_intr)) == false)
+                            interval::intr3 wi = vertices[k] - vertices[k + 1];
+                            interval::intr3 wo = wo_intr;
+                            interval::intr3 ht = refraction_normal(wi, wo, 1.0f / eta);
+                            if (interval::zeroIncluded(cross(normal_intr, ht)) == false)
                             {
                                 admissible = false;
                                 break;
@@ -883,8 +872,10 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         }
                         else
                         {
-                            interval::intr3 ht = wo * eta + wi;
-                            if (interval::zeroIncluded(interval::cross(ht, normal_intr)) == false)
+                            interval::intr3 wi = vertices[k] - vertices[k + 1];
+                            interval::intr3 wo = wo_intr;
+                            interval::intr3 ht = refraction_normal(wi, wo, eta);
+                            if (interval::zeroIncluded(cross(normal_intr, ht)) == false)
                             {
                                 admissible = false;
                                 break;
