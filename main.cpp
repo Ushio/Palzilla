@@ -1508,8 +1508,8 @@ int main() {
         // pre pass
         enum {
             MAX_PATH_LENGTH = 4,
-            MAX_PATH_CACHE_COUNT = 2048 * 2,
-            RAYS_PER_TRI = 32,
+            MAX_PATH_CACHE_COUNT = 256,
+            RAYS_PER_TRI = 1024,
         };
 
         struct TrianglePath {
@@ -1526,8 +1526,10 @@ int main() {
             }
         }
 
+        static int terminationCount = 32;
+
         // ray trace
-#if 0
+#if 1
         enum {
             K = 1
         };
@@ -1541,6 +1543,7 @@ int main() {
         eDescriptor.set(0, Event::T);
         eDescriptor.set(1, Event::T);
 #endif
+        int totalPath = 0;
         for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
         {
             minimum_lbvh::Triangle tri = polygonSoup.triangles[iTri];
@@ -1549,8 +1552,11 @@ int main() {
                 continue;
             }
 
-            for (int j = 0; j < RAYS_PER_TRI; j++)
+            int contiguousFails = 0;
+            for (int j = 0; ; j++)
             {
+                totalPath++;
+
                 float2 params = {};
                 sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j, 123, 456, 789);
                 params = square2triangle(params);
@@ -1645,6 +1651,7 @@ int main() {
                     }
                     break;
                 }
+                bool success = false;
 
                 if (admissiblePath)
                 {
@@ -1655,6 +1662,7 @@ int main() {
                     }
                     hashVal |= 1u;
 
+                    
                     for (int iPath = 0; iPath < MAX_PATH_CACHE_COUNT; iPath++)
                     {
                         if (pathCache[cacheTo].hashes[iPath] == 0)
@@ -1666,6 +1674,7 @@ int main() {
                                 pathCache[cacheTo].pathes[iPath][d] = tris[d];
                             }
                             //DrawPoint(to(p_final), { 255, 255, 0 }, 2);
+                            success = true;
                             break;
                         }
                         else if(pathCache[cacheTo].hashes[iPath] == hashVal)
@@ -1677,11 +1686,27 @@ int main() {
                         if (iPath == MAX_PATH_CACHE_COUNT - 1)
                         {
                             abort();
+                            break;
                         }
                     }
                 }
+
+                if (success)
+                {
+                    contiguousFails = 0;
+                }
+                else
+                {
+                    contiguousFails++;
+                }
+                if (terminationCount < contiguousFails)
+                {
+                    break;
+                }
             }
         }
+
+        // printf("totalPath %d\n", totalPath);
 
         //for (int j = 0; j < image.height(); ++j)
         ParallelFor(image.height(), [&](int j) {
@@ -1728,7 +1753,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 0
+#if 1
                 // reflection 1 level
                 //EventDescriptor eDescriptor;
                 //eDescriptor.set(0, Event::R);
@@ -1803,6 +1828,8 @@ int main() {
                 }
 
 #else
+                int numberOfNewton = 0;
+
                 //// refraction 2 levels
                 //EventDescriptor eDescriptor;
                 //eDescriptor.set(0, Event::T);
@@ -1811,8 +1838,6 @@ int main() {
                 //enum {
                 //    K = 2
                 //};
-                //int numberOfNewton = 0;
-
                 //traverseAdmissibleNodes<K>(
                 //    eDescriptor,
                 //    eta,
@@ -1857,6 +1882,8 @@ int main() {
                     if (pathCache[hit.triangleIndex].hashes[iPath] == 0)
                         break;
 
+                    numberOfNewton++;
+
                     minimum_lbvh::Triangle tris[K];
                     TriangleAttrib attribs[K];
                     for (int k = 0; k < K; k++)
@@ -1885,7 +1912,7 @@ int main() {
 #endif
 
                 // 
-                // glm::vec3 color = viridis(numberOfNewton / 1000.0f);
+                // glm::vec3 color = viridis((float)numberOfNewton / MAX_PATH_CACHE_COUNT);
 
                 float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 
@@ -1912,7 +1939,8 @@ int main() {
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
-
+        ImGui::InputInt("terminationCount", &terminationCount);
+        
         //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
         //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))
