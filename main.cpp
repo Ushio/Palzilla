@@ -1508,28 +1508,36 @@ int main() {
         // pre pass
         enum {
             MAX_PATH_LENGTH = 4,
-            MAX_PATH_CACHE_COUNT = 256,
-            RAYS_PER_TRI = 1024,
+            CACHE_STORAGE_COUNT = 1u << 22
         };
 
-        struct TrianglePath {
-            uint32_t hashes[MAX_PATH_CACHE_COUNT];
-            int pathes[MAX_PATH_CACHE_COUNT][MAX_PATH_LENGTH];
-        };
-
-        std::vector<TrianglePath> pathCache(polygonSoup.triangles.size());
-        for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
+        struct TrianglePath 
         {
-            for (int i = 0; i < MAX_PATH_CACHE_COUNT ; i++)
-            {
-                pathCache[iTri].hashes[i] = 0;
-            }
-        }
+            int tris[MAX_PATH_LENGTH];
+        };
+        std::vector<uint32_t> pathHashes(CACHE_STORAGE_COUNT);
+        std::vector<TrianglePath> pathes(CACHE_STORAGE_COUNT);
 
-        static int terminationCount = 32;
+        PCG rng;
+
+        const float spacial_step = 0.05f;
+        auto spacial_hash = [spacial_step](float3 p) {
+            float3 index = (p / spacial_step);
+            int x = index.x;
+            int y = index.y;
+            int z = index.z;
+
+            uint32_t h = 12345;
+            h = hash_combine(h, x * 2654435761);
+            h = hash_combine(h, y * 805459861);
+            h = hash_combine(h, z * 3674653429);
+            return h | 1u;
+        };
+
+        static int terminationCount = 128;
 
         // ray trace
-#if 1
+#if 0
         enum {
             K = 1
         };
@@ -1655,38 +1663,37 @@ int main() {
 
                 if (admissiblePath)
                 {
-                    uint32_t hashVal = 123;
+                    uint32_t hashOfPath = 123;
                     for (int d = 0; d < K; d++)
                     {
-                        hashVal = minimum_lbvh::hashPCG(hashVal + tris[d]);
+                        hashOfPath = minimum_lbvh::hashPCG(hashOfPath + tris[d]);
                     }
-                    hashVal |= 1u;
+                    hashOfPath |= 1u;
 
-                    
-                    for (int iPath = 0; iPath < MAX_PATH_CACHE_COUNT; iPath++)
+                    // linear probing
+                    float3 jittering = {
+                        spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
+                        spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
+                        spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
+                    };
+                    uint32_t hashOfP = spacial_hash(p_final + jittering) % CACHE_STORAGE_COUNT;
+                    for (int offset = 0 ; offset < CACHE_STORAGE_COUNT ; offset++)
                     {
-                        if (pathCache[cacheTo].hashes[iPath] == 0)
+                        // CACHE_STORAGE_COUNT
+                        uint32_t index = (hashOfP + offset) % CACHE_STORAGE_COUNT;
+                        if (pathHashes[index] == 0) // empty
                         {
-                            // store
-                            pathCache[cacheTo].hashes[iPath] = hashVal;
+                            pathHashes[index] = hashOfPath;
                             for (int d = 0; d < K; d++)
                             {
-                                pathCache[cacheTo].pathes[iPath][d] = tris[d];
+                                pathes[index].tris[d] = tris[d];
                             }
-                            //DrawPoint(to(p_final), { 255, 255, 0 }, 2);
                             success = true;
                             break;
                         }
-                        else if(pathCache[cacheTo].hashes[iPath] == hashVal)
+                        else if (pathHashes[index] == hashOfPath)
                         {
-                            //DrawPoint(to(p_final), { 255, 0, 255 }, 2);
-                            break; // skip known path
-                        }
-
-                        if (iPath == MAX_PATH_CACHE_COUNT - 1)
-                        {
-                            abort();
-                            break;
+                            break; // existing
                         }
                     }
                 }
@@ -1706,7 +1713,7 @@ int main() {
             }
         }
 
-        // printf("totalPath %d\n", totalPath);
+        printf("occ %f\n", (float)totalPath / CACHE_STORAGE_COUNT);
 
         //for (int j = 0; j < image.height(); ++j)
         ParallelFor(image.height(), [&](int j) {
@@ -1753,7 +1760,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 1
+#if 0
                 // reflection 1 level
                 //EventDescriptor eDescriptor;
                 //eDescriptor.set(0, Event::R);
@@ -1794,18 +1801,29 @@ int main() {
                 //        }
                 //    });
 
-                for (int iPath = 0; iPath < MAX_PATH_CACHE_COUNT; iPath++)
+
+                int numberOfNewton = 0;
+                
+                // linear probing
+                uint32_t hashOfP = spacial_hash(p) % CACHE_STORAGE_COUNT;
+                for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
                 {
-                    if (pathCache[hit.triangleIndex].hashes[iPath] == 0)
-                        break;
+                    // CACHE_STORAGE_COUNT
+                    uint32_t index = (hashOfP + offset) % CACHE_STORAGE_COUNT;
+                    if (pathHashes[index] == 0)
+                    {
+                        break; // no more cached
+                    }
+
+                    numberOfNewton++;
 
                     minimum_lbvh::Triangle tris[K];
                     TriangleAttrib attribs[K];
                     for (int k = 0; k < K; k++)
                     {
-                        int index = pathCache[hit.triangleIndex].pathes[iPath][k];
-                        tris[k] = polygonSoup.triangles[index];
-                        attribs[k] = polygonSoup.triangleAttribs[index];
+                        int indexOfTri = pathes[index].tris[k];
+                        tris[k] = polygonSoup.triangles[indexOfTri];
+                        attribs[k] = polygonSoup.triangleAttribs[indexOfTri];
                     }
 
                     float parameters[K * 2];
@@ -1877,10 +1895,16 @@ int main() {
 
                 //});
 
-                for (int iPath = 0; iPath < MAX_PATH_CACHE_COUNT; iPath++)
+                // linear probing
+                uint32_t hashOfP = spacial_hash(p) % CACHE_STORAGE_COUNT;
+                for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
                 {
-                    if (pathCache[hit.triangleIndex].hashes[iPath] == 0)
-                        break;
+                    // CACHE_STORAGE_COUNT
+                    uint32_t index = (hashOfP + offset) % CACHE_STORAGE_COUNT;
+                    if (pathHashes[index] == 0)
+                    {
+                        break; // no more cached
+                    }
 
                     numberOfNewton++;
 
@@ -1888,9 +1912,9 @@ int main() {
                     TriangleAttrib attribs[K];
                     for (int k = 0; k < K; k++)
                     {
-                        int index = pathCache[hit.triangleIndex].pathes[iPath][k];
-                        tris[k] = polygonSoup.triangles[index];
-                        attribs[k] = polygonSoup.triangleAttribs[index];
+                        int indexOfTri = pathes[index].tris[k];
+                        tris[k] = polygonSoup.triangles[indexOfTri];
+                        attribs[k] = polygonSoup.triangleAttribs[indexOfTri];
                     }
 
                     float parameters[K * 2];
@@ -1911,8 +1935,7 @@ int main() {
                 }
 #endif
 
-                // 
-                // glm::vec3 color = viridis((float)numberOfNewton / MAX_PATH_CACHE_COUNT);
+                // glm::vec3 color = viridis((float)numberOfNewton / 128);
 
                 float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 

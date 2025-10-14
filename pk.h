@@ -947,3 +947,8 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
         currentNode = stack.top(); stack.pop();
     }
 }
+
+inline uint32_t hash_combine(uint32_t seed, uint32_t h)
+{
+    return h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
