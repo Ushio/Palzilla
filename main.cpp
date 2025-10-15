@@ -1508,11 +1508,12 @@ int main() {
         // pre pass
         enum {
             MAX_PATH_LENGTH = 4,
-            CACHE_STORAGE_COUNT = 1u << 22
+            CACHE_STORAGE_COUNT = 1u << 18
         };
 
         struct TrianglePath 
         {
+            uint32_t hashOfP;
             int tris[MAX_PATH_LENGTH];
         };
         std::vector<uint32_t> pathHashes(CACHE_STORAGE_COUNT);
@@ -1521,7 +1522,7 @@ int main() {
         PCG rng;
 
         const float spacial_step = 0.05f;
-        auto spacial_hash = [spacial_step](float3 p) {
+        auto spacial_hash = [](float3 p, float spacial_step) {
             float3 index = (p / spacial_step);
             int x = index.x;
             int y = index.y;
@@ -1537,7 +1538,7 @@ int main() {
         static int terminationCount = 128;
 
         // ray trace
-#if 0
+#if 1
         enum {
             K = 1
         };
@@ -1563,8 +1564,6 @@ int main() {
             int contiguousFails = 0;
             for (int j = 0; ; j++)
             {
-                totalPath++;
-
                 float2 params = {};
                 sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j, 123, 456, 789);
                 params = square2triangle(params);
@@ -1676,19 +1675,22 @@ int main() {
                         spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
                         spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
                     };
-                    uint32_t hashOfP = spacial_hash(p_final + jittering) % CACHE_STORAGE_COUNT;
+                    uint32_t hashOfP = spacial_hash(p_final + jittering, spacial_step);
+                    uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
                     for (int offset = 0 ; offset < CACHE_STORAGE_COUNT ; offset++)
                     {
-                        // CACHE_STORAGE_COUNT
-                        uint32_t index = (hashOfP + offset) % CACHE_STORAGE_COUNT;
+                        uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
                         if (pathHashes[index] == 0) // empty
                         {
                             pathHashes[index] = hashOfPath;
+                            pathes[index].hashOfP = hashOfP;
                             for (int d = 0; d < K; d++)
                             {
                                 pathes[index].tris[d] = tris[d];
                             }
                             success = true;
+
+                            totalPath++;
                             break;
                         }
                         else if (pathHashes[index] == hashOfPath)
@@ -1760,7 +1762,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 0
+#if 1
                 // reflection 1 level
                 //EventDescriptor eDescriptor;
                 //eDescriptor.set(0, Event::R);
@@ -1805,14 +1807,19 @@ int main() {
                 int numberOfNewton = 0;
                 
                 // linear probing
-                uint32_t hashOfP = spacial_hash(p) % CACHE_STORAGE_COUNT;
+                uint32_t hashOfP = spacial_hash(p, spacial_step);
+                uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
                 for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
                 {
-                    // CACHE_STORAGE_COUNT
-                    uint32_t index = (hashOfP + offset) % CACHE_STORAGE_COUNT;
+                    uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
                     if (pathHashes[index] == 0)
                     {
                         break; // no more cached
+                    }
+
+                    if (pathes[index].hashOfP != hashOfP)
+                    {
+                        continue;
                     }
 
                     numberOfNewton++;
