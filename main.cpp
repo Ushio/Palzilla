@@ -1538,7 +1538,7 @@ int main() {
         static int terminationCount = 128;
 
         // ray trace
-#if 1
+#if 0
         enum {
             K = 1
         };
@@ -1762,7 +1762,7 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 1
+#if 0
                 // reflection 1 level
                 //EventDescriptor eDescriptor;
                 //eDescriptor.set(0, Event::R);
@@ -1903,16 +1903,20 @@ int main() {
                 //});
 
                 // linear probing
-                uint32_t hashOfP = spacial_hash(p) % CACHE_STORAGE_COUNT;
+                uint32_t hashOfP = spacial_hash(p, spacial_step);
+                uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
                 for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
                 {
                     // CACHE_STORAGE_COUNT
-                    uint32_t index = (hashOfP + offset) % CACHE_STORAGE_COUNT;
+                    uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
                     if (pathHashes[index] == 0)
                     {
                         break; // no more cached
                     }
-
+                    if (pathes[index].hashOfP != hashOfP)
+                    {
+                        continue;
+                    }
                     numberOfNewton++;
 
                     minimum_lbvh::Triangle tris[K];
