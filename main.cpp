@@ -1671,9 +1671,9 @@ int main() {
 
                     // linear probing
                     float3 jittering = {
-                        spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
-                        spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
-                        spacial_step * lerp(-0.5f, 0.5f, rng.uniformf()),
+                        spacial_step * lerp(-0.1f, 0.1f, rng.uniformf()),
+                        spacial_step * lerp(-0.1f, 0.1f, rng.uniformf()),
+                        spacial_step * lerp(-0.1f, 0.1f, rng.uniformf()),
                     };
                     uint32_t hashOfP = spacial_hash(p_final + jittering, spacial_step);
                     uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
