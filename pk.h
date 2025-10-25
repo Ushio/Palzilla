@@ -1,6 +1,7 @@
 #pragma once
 #include "helper_math.h"
 #include "minimum_lbvh.h"
+#include "sen.h"
 
 //#define ENABLE_PATH_CUTS 
 

@@ -1,23 +1,29 @@
 #pragma once
 
+#if ( defined( __CUDACC__ ) || defined( __HIPCC__ ) )
+#define SEN_KERNELCC
+#define SEN_DEVICE __device__
+#define SEN_ASSERT(ExpectTrue) 
+#else
 #include <intrin.h>
-
+#define SEN_DEVICE
 #if defined(SEN_ENABLE_ASSERTION)
-#define SEN_ASSERT(ExpectTrue) if((ExpectTrue) == 0) { __debugbreak(); }
+#define SEN_ASSERT(ExpectTrue) if((ExpectTrue) == 0) { __debugbreak(); abort(); }
 #else
 #define SEN_ASSERT(ExpectTrue) 
+#endif
 #endif
 
 namespace sen
 {
     template <class T>
-    inline constexpr T ss_max(T x, T y)
+    SEN_DEVICE inline constexpr T ss_max(T x, T y)
     {
         return (x < y) ? y : x;
     }
 
     template <class T>
-    inline constexpr T ss_min(T x, T y)
+    SEN_DEVICE inline constexpr T ss_min(T x, T y)
     {
         return (y < x) ? y : x;
     }
@@ -25,18 +31,18 @@ namespace sen
     template <int numberOfRows, int numberOfCols>
     struct Storage
     {
-        void allocate(int numberOfRows, int numberOfCols) {}
+        SEN_DEVICE void allocate(int M, int N) {}
 
-        int rows() const { return numberOfRows; }
-        int cols() const { return numberOfCols; }
-        int size() const { return numberOfRows * numberOfCols; }
+        SEN_DEVICE int rows() const { return numberOfRows; }
+        SEN_DEVICE int cols() const { return numberOfCols; }
+        SEN_DEVICE int size() const { return numberOfRows * numberOfCols; }
 
-        float& operator[](int i)
+        SEN_DEVICE float& operator[](int i)
         {
             SEN_ASSERT(0 <= i && i < size() && "out of bounds");
             return m_storage[i];
         }
-        const float& operator[](int i) const
+        SEN_DEVICE const float& operator[](int i) const
         {
             SEN_ASSERT(0 <= i && i < size() && "out of bounds");
             return m_storage[i];
@@ -45,6 +51,8 @@ namespace sen
         float m_storage[numberOfCols * numberOfRows];
     };
 
+#if !defined(SEN_KERNELCC)
+    // Dynamic Storage is only available on the CPU
     template <>
     struct Storage<-1, -1>
     {
@@ -91,6 +99,7 @@ namespace sen
         int m_numberOfCols = 0;
         std::unique_ptr<float[]> m_storage;
     };
+#endif
 
     // Example of Mat<3 /*out*/, 2 /*in*/>
     // | m(0,0), m(0,1) |
@@ -99,10 +108,10 @@ namespace sen
     template <int numberOfRows, int numberOfCols>
     struct Mat
     {
-        Mat() {}
+        SEN_DEVICE Mat() {}
 
         template <int M, int N>
-        Mat(const Mat<M, N>& rhs /* static or dynamic */)
+        SEN_DEVICE Mat(const Mat<M, N>& rhs /* static or dynamic */)
         {
             m_storage.allocate(M, N);
             
@@ -116,31 +125,31 @@ namespace sen
             }
         }
 
-        void allocate(int M, int N)
+        SEN_DEVICE void allocate(int M, int N)
         {
             m_storage.allocate(M, N);
         }
 
     private:
         template <class... Tail>
-        void set_resolve(int i, float x, Tail... tail)
+        SEN_DEVICE void set_resolve(int i, float x, Tail... tail)
         {
             this->operator()( i / cols(), i % cols()) = x;
             set_resolve( i + 1, tail...);
         }
-        void set_resolve(int i, float x) {
+        SEN_DEVICE void set_resolve(int i, float x) {
             this->operator()(i / cols(), i % cols()) = x;
             SEN_ASSERT(i + 1 == rows() * cols() && "element mismatch");
         }
     public:
         template <class... Args>
-        Mat<numberOfRows, numberOfCols>& set(Args... args)
+        SEN_DEVICE Mat<numberOfRows, numberOfCols>& set(Args... args)
         {
             set_resolve( 0, args...);
             return *this;
         }
 
-        Mat<numberOfRows, numberOfCols>& set_zero()
+        SEN_DEVICE Mat<numberOfRows, numberOfCols>& set_zero()
         {
             for (int i = 0; i < size(); i++)
             {
@@ -148,7 +157,7 @@ namespace sen
             }
             return *this;
         }
-        Mat<numberOfRows, numberOfCols>& set_identity()
+        SEN_DEVICE Mat<numberOfRows, numberOfCols>& set_identity()
         {
             SEN_ASSERT(rows() == cols() && "dim mismatch");
 
@@ -161,40 +170,41 @@ namespace sen
         }
 
 
-        int rows() const { return m_storage.rows(); }
-        int cols() const { return m_storage.cols(); }
-        int size() const { return m_storage.size(); }
+        SEN_DEVICE int rows() const { return m_storage.rows(); }
+        SEN_DEVICE int cols() const { return m_storage.cols(); }
+        SEN_DEVICE int size() const { return m_storage.size(); }
 
-        float& operator()(int i_row, int i_col)
+        SEN_DEVICE float& operator()(int i_row, int i_col)
         {
             SEN_ASSERT(0 <= i_col && i_col < cols() && "out of bounds");
             SEN_ASSERT(0 <= i_row && i_row < rows() && "out of bounds");
             return m_storage[i_col * m_storage.rows() + i_row];
         }
-        const float& operator()(int i_row, int i_col) const
+        SEN_DEVICE const float& operator()(int i_row, int i_col) const
         {
             SEN_ASSERT(0 <= i_col && i_col < cols() && "out of bounds");
             SEN_ASSERT(0 <= i_row && i_row < rows() && "out of bounds");
             return m_storage[i_col * m_storage.rows() + i_row];
         }
 
-        float& operator[](int i)
+        SEN_DEVICE float& operator[](int i)
         {
             return m_storage[i];
         }
-        const float& operator[](int i) const
+        SEN_DEVICE const float& operator[](int i) const
         {
             return m_storage[i];
         }
 
-        float* begin() { return &m_storage[0]; }
-        float* end() { return &m_storage[0] + m_storage.size(); }
-        const float* begin() const { return &m_storage[0]; }
-        const float* end() const { return &m_storage[0] + m_storage.size(); }
+        SEN_DEVICE float* begin() { return &m_storage[0]; }
+        SEN_DEVICE float* end() { return &m_storage[0] + m_storage.size(); }
+        SEN_DEVICE const float* begin() const { return &m_storage[0]; }
+        SEN_DEVICE const float* end() const { return &m_storage[0] + m_storage.size(); }
 
         Storage<numberOfRows, numberOfCols> m_storage;
     };
 
+#if !defined(SEN_KERNELCC)
     using MatDyn = Mat<-1, -1>;
 
     template <int rows, int cols>
@@ -212,9 +222,10 @@ namespace sen
         }
         printf("}\n");
     }
+#endif
 
     template <int rows, int cols>
-    bool operator==(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
+    SEN_DEVICE bool operator==(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
     {
         SEN_ASSERT(lhs.cols() == rhs.cols() && "invalid comparison");
         SEN_ASSERT(lhs.rows() == rhs.rows() && "invalid comparison");
@@ -229,13 +240,13 @@ namespace sen
         return true;
     }
     template <int rows, int cols>
-    bool operator!=(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
+    SEN_DEVICE bool operator!=(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
     {
         return !(lhs == rhs);
     }
 
     template <int lhs_rows, int lhs_cols_rhs_rows, int rhs_cols>
-    Mat<lhs_rows, rhs_cols> operator*(const Mat<lhs_rows, lhs_cols_rhs_rows>& lhs, const Mat<lhs_cols_rhs_rows, rhs_cols>& rhs)
+    SEN_DEVICE Mat<lhs_rows, rhs_cols> operator*(const Mat<lhs_rows, lhs_cols_rhs_rows>& lhs, const Mat<lhs_cols_rhs_rows, rhs_cols>& rhs)
     {
         Mat<lhs_rows, rhs_cols> r;
         SEN_ASSERT(lhs.cols() == rhs.rows() && "invalid multiplication");
@@ -257,7 +268,7 @@ namespace sen
     }
 
     template <int rows, int cols, class F>
-    Mat<rows, cols> element_wise_op_binary(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs, F f)
+    SEN_DEVICE Mat<rows, cols> element_wise_op_binary(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs, F f)
     {
         Mat<rows, cols> r;
 
@@ -272,19 +283,20 @@ namespace sen
     }
 
     template <int rows, int cols>
-    Mat<rows, cols> operator-(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
+    SEN_DEVICE Mat<rows, cols> operator-(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
     {
         return element_wise_op_binary(lhs, rhs, [](float a, float b) { return a - b; });
     }
     template <int rows, int cols>
-    Mat<rows, cols> operator+(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
+    SEN_DEVICE Mat<rows, cols> operator+(const Mat<rows, cols>& lhs, const Mat<rows, cols>& rhs)
     {
         return element_wise_op_binary(lhs, rhs, [](float a, float b) { return a + b; });
     }
 
+
     // Mat vs scaler
     template <int rows, int cols>
-    Mat<rows, cols> operator*(const Mat<rows, cols>& m, float x)
+    SEN_DEVICE Mat<rows, cols> operator*(const Mat<rows, cols>& m, float x)
     {
         Mat<rows, cols> r;
         r.allocate(m.rows(), m.cols());
@@ -295,13 +307,13 @@ namespace sen
         return r;
     }
     template <int rows, int cols>
-    Mat<rows, cols> operator*(float x, const Mat<rows, cols>& m)
+    SEN_DEVICE Mat<rows, cols> operator*(float x, const Mat<rows, cols>& m)
     {
         return m * x;
     }
 
     template <int rows, int cols>
-    Mat<rows, cols> operator/(const Mat<rows, cols>& m, float x)
+    SEN_DEVICE Mat<rows, cols> operator/(const Mat<rows, cols>& m, float x)
     {
         Mat<rows, cols> r;
         r.allocate(m.rows(), m.cols());
@@ -313,7 +325,7 @@ namespace sen
     }
 
     template <int rows, int cols>
-    Mat<cols, rows> transpose(const Mat<rows, cols>& m)
+    SEN_DEVICE Mat<cols, rows> transpose(const Mat<rows, cols>& m)
     {
         Mat<cols, rows> r;
 
@@ -330,7 +342,7 @@ namespace sen
     }
 
     template <int rows, int cols>
-    float column_dot(const Mat<rows, cols>& m, int col_0, int col_1)
+    SEN_DEVICE float column_dot(const Mat<rows, cols>& m, int col_0, int col_1)
     {
         int col_0_head = col_0 * m.rows();
         int col_1_head = col_1 * m.rows();
@@ -355,15 +367,15 @@ namespace sen
         Mat<cols, cols> V;
         Mat<rows, cols> B; // B = A x J1 x J2 ... JN, where J is rotation
 
-        float singular(int i) const
+        SEN_DEVICE float singular(int i) const
         {
             return sqrtf(column_dot(B, i, i));
         }
-        int nSingulars() const
+        SEN_DEVICE int nSingulars() const
         {
             return B.cols();
         }
-        Mat<cols, rows> pinv( float tol = 1e-7f ) const
+        SEN_DEVICE Mat<cols, rows> pinv( float tol = 1e-7f ) const
         {
             auto B_reg = B;
             for (int i_col = 0; i_col < B_reg.cols(); i_col++)
@@ -377,10 +389,11 @@ namespace sen
             return V * transpose(B_reg);
         }
     };
+
     using SVDDyn = SVD<-1, -1>;
 
     template <int rows, int cols>
-    SVD<rows, cols> svd_BV(const Mat<rows, cols>& A)
+    SEN_DEVICE SVD<rows, cols> svd_BV(const Mat<rows, cols>& A)
     {
         Mat<rows, cols> B = A;
         Mat<cols, cols> V;
@@ -451,14 +464,14 @@ namespace sen
     }
 
     template <int rows, int cols>
-    Mat<cols, rows> pinv(const Mat<rows, cols>& A)
+    SEN_DEVICE Mat<cols, rows> pinv(const Mat<rows, cols>& A)
     {
         auto svd = sen::svd_BV(A);
         return svd.pinv();
     }
 
     template <int s>
-    Mat<s, s> cholesky_decomposition(const Mat<s, s>& A)
+    SEN_DEVICE Mat<s, s> cholesky_decomposition(const Mat<s, s>& A)
     {
         Mat<s, s> L;
         L.allocate(A.rows(), A.cols());
@@ -487,7 +500,7 @@ namespace sen
     }
 
     template <int s, int t /*1 or - 1*/>
-    inline sen::Mat<s, t> solve_cholesky( const Mat<s, s>& A, const sen::Mat<s, t>& b )
+    SEN_DEVICE inline sen::Mat<s, t> solve_cholesky( const Mat<s, s>& A, const sen::Mat<s, t>& b )
     {
         static_assert(t == 1 || t == -1, "invalid b");
         Mat<s, s> L = cholesky_decomposition(A);
@@ -529,7 +542,7 @@ namespace sen
     };
     // Schwarz-Rutishauser
     template <int rows, int cols>
-    inline QR_economy<rows, cols> qr_decomposition_sr(const Mat<rows, cols>& A)
+    SEN_DEVICE inline QR_economy<rows, cols> qr_decomposition_sr(const Mat<rows, cols>& A)
     {
         static_assert(cols <= rows, "not supported yet");
 
@@ -569,7 +582,7 @@ namespace sen
         Mat<rows, n_householder_s> vs; // householder vectors
         Mat<rows, cols> R;
 
-        Mat<rows, rows> Q() const
+        SEN_DEVICE Mat<rows, rows> Q() const
         {
             Mat<rows, rows> q;
             q.allocate(vs.rows(), vs.rows());
@@ -595,7 +608,7 @@ namespace sen
         }
     private:
         template <int input_cols>
-        Mat<rows, input_cols> householderApply(Mat<rows, input_cols> x, int begin, int end, int step )
+        SEN_DEVICE Mat<rows, input_cols> householderApply(Mat<rows, input_cols> x, int begin, int end, int step )
         {
             static_assert(input_cols == 1 || input_cols - 1, "bad size");
             SEN_ASSERT(x.cols() == 1);
@@ -621,14 +634,14 @@ namespace sen
     public:
         // transpose(Q) * x
         template <int input_cols>
-        Mat<rows, input_cols> applyQTransposed(Mat<rows, input_cols> x)
+        SEN_DEVICE Mat<rows, input_cols> applyQTransposed(Mat<rows, input_cols> x)
         {
             return householderApply(x, 0 /*begin*/, vs.cols() /*end*/, 1 /*step*/);
         }
 
         // Q * x
         template <int input_cols>
-        Mat<rows, input_cols> applyQ(Mat<rows, input_cols> x)
+        SEN_DEVICE Mat<rows, input_cols> applyQ(Mat<rows, input_cols> x)
         {
             return householderApply(x, vs.cols() - 1 /*begin*/, -1 /*end*/, -1 /*step*/);
         }
@@ -636,7 +649,7 @@ namespace sen
 
     // householder QR decomposition
     template <int rows, int cols>
-    inline QR_full<rows, cols> qr_decomposition_hr(Mat<rows, cols> A)
+    SEN_DEVICE inline QR_full<rows, cols> qr_decomposition_hr(Mat<rows, cols> A)
     {
         int n_householder_d = ss_min(A.cols(), A.rows() - 1);
         Mat<rows, QR_full<rows, cols>::n_householder_s> vs;
@@ -681,7 +694,7 @@ namespace sen
     }
 
     template <int rows, int cols, int t>
-    inline Mat<cols, t> solve_qr_underdetermined(Mat<rows, cols> A, Mat<rows, t> b)
+    SEN_DEVICE inline Mat<cols, t> solve_qr_underdetermined(Mat<rows, cols> A, Mat<rows, t> b)
     {
         static_assert(t == -1 || t == 1, "invalid arg");
 
@@ -704,7 +717,7 @@ namespace sen
         return qr.applyQ(xp);
     }
     template <int rows, int cols, int t>
-    inline Mat<cols, t> solve_qr_overdetermined(Mat<rows, cols> A, Mat<rows, t> b)
+    SEN_DEVICE inline Mat<cols, t> solve_qr_overdetermined(Mat<rows, cols> A, Mat<rows, t> b)
     {
         static_assert(t == -1 || t == 1, "invalid arg");
 
