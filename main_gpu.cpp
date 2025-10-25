@@ -67,7 +67,6 @@ int main()
     TypedBuffer<uint32_t> pixels(TYPED_BUFFER_DEVICE);
     TypedBuffer<float4> accumulators(TYPED_BUFFER_DEVICE);
 
-
     // BVH
     minimum_lbvh::BVHGPUBuilder gpuBuilder(
         GetDataPath("../minimum_lbvh.cu").c_str(),
@@ -147,11 +146,18 @@ int main()
     camera.origin = { 0.0f, 1.0f, 4.0f };
     camera.lookat = { 0, 1.0f, 0 };
 
+    int iteration = 0;
+
+    auto clearAccumulation = [&]() {
+        oroMemsetD8(accumulators.data(), 0, accumulators.size() * sizeof(float4));
+        iteration = 0;
+    };
+
     while (pr::NextFrame() == false) {
         if (IsImGuiUsingMouse() == false) {
             if (UpdateCameraBlenderLike(&camera))
             {
-                oroMemsetD8(accumulators.data(), 0, accumulators.size() * sizeof(float4));
+                clearAccumulation();
             }
         }
 
@@ -183,9 +189,13 @@ int main()
         //pr::PrimEnd();
 
         static glm::vec3 p_light = { 0, 1, 1 };
+        glm::vec3 prev_p_light = p_light;
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
-
+        if (prev_p_light != p_light)
+        {
+            clearAccumulation();
+        }
 
         int imageWidth = GetScreenWidth();
         int imageHeight = GetScreenHeight();
@@ -195,7 +205,7 @@ int main()
         if (accumulators.size() != imageWidth * imageHeight)
         {
             accumulators.allocate(imageWidth * imageHeight);
-            oroMemsetD8(accumulators.data(), 0, accumulators.size() * sizeof(float4));
+            clearAccumulation();
         }
 
         RayGenerator rayGenerator;
@@ -203,18 +213,31 @@ int main()
 
         shader.launch("render",
             ShaderArgument()
-            .value(pixels.data())
+            .value(accumulators.data())
             .value(int2{ imageWidth, imageHeight })
             .value(rayGenerator)
             .value(gpuBuilder.m_rootNode)
             .value(gpuBuilder.m_internals)
             .value(trianglesDevice.data())
             .value(triangleAttribsDevice.data())
-            .value(to(p_light)),
+            .value(to(p_light))
+            .value(iteration),
             div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
             16, 16, 1,
             0
         );
+
+        shader.launch("pack",
+            ShaderArgument()
+            .value(pixels.data())
+            .value(accumulators.data())
+            .value(imageWidth* imageHeight),
+            div_round_up64(imageWidth* imageHeight, 256), 1, 1,
+            256, 1, 1,
+            0
+        );
+
+        iteration++;
 
         static Image2DRGBA8 image;
         image.allocate(imageWidth, imageHeight);
@@ -230,9 +253,7 @@ int main()
         ImGui::Begin("Panel");
         ImGui::Text("fps = %f", GetFrameRate());
 
-        //float4 pix;
-        //oroMemcpyDtoH(&pix, accumulators.data(), sizeof(pix));
-        //ImGui::Text("spp : %d", (int)pix.w);
+        ImGui::Text("spp : %d", iteration);
 
         ImGui::End();
 

@@ -65,7 +65,7 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
     }
 }
 
-extern "C" __global__ void render(uint32_t* pixels, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light)
+extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -77,14 +77,18 @@ extern "C" __global__ void render(uint32_t* pixels, int2 imageSize, RayGenerator
 
     int pixel = xi + yi * imageSize.x;
 
+    int dimLevel = 0;
+    float2 jitter;
+    sobol::shuffled_scrambled_sobol_2d(&jitter.x, &jitter.y, iteration, xi, yi, dimLevel++);
+
     float3 ro, rd;
-    rayGenerator.shoot(&ro, &rd, (float)xi / imageSize.x, (float)yi / imageSize.y);
+    rayGenerator.shoot(&ro, &rd, (float)(xi + jitter.x) / imageSize.x, (float)(yi + jitter.y) / imageSize.y);
 
     Hit hit;
     intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, invRd(rd));
     if (hit.t == MINIMUM_LBVH_FLT_MAX)
     {
-        pixels[pixel] = packRGBA({ 0, 0, 0, 1 });
+        accumulators[pixel] += {0.0f, 0.0f, 0.0f, 1.0f};
         return;
     }
 
@@ -99,7 +103,7 @@ extern "C" __global__ void render(uint32_t* pixels, int2 imageSize, RayGenerator
     if (attribs[hit.triangleIndex].material != Material::Diffuse)
     {
         // handle later
-        pixels[pixel] = packRGBA({ 0, 1, 1, 1 });
+        accumulators[pixel] += {0.0f, 1.0f, 1.0f, 1.0f};
         return;
     }
 
@@ -115,7 +119,8 @@ extern "C" __global__ void render(uint32_t* pixels, int2 imageSize, RayGenerator
         float3 light_intencity = { 1, 1, 1 };
         L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
     }
-    pixels[pixel] = packRGBA({ L.x, L.y, L.z, 1 });
+
+    accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }
 
 extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
