@@ -1891,14 +1891,14 @@ int main() {
 
                 //        if (converged)
                 //        {
-                //            bool contributable = contributablePath<K>(
+                //            bool throughput = contributableThroughput<K>(
                 //                parameters, to(p_light), p, tris, attribs, eDescriptor,
                 //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
-                //            if (contributable)
+                //            if (0.0f < throughput)
                 //            {
                 //                float dAdwValue = dAdw(to(p_light), getVertex(0, tris, parameters) - to(p_light), p, tris, attribs, eDescriptor, K, eta);
-                //                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+                //                L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
                 //            }
                 //        }
 
