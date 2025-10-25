@@ -1,14 +1,20 @@
 #pragma once
 
+#if ( defined( __CUDACC__ ) || defined( __HIPCC__ ) )
+#define SAKA_DEVICE __device__
+#else
+#define SAKA_DEVICE
+#endif
+
 namespace saka
 {
     class dval
     {
     public:
-        dval(): v(0.0f), g(0.0f) {}
-        dval(float x) :v(x), g(0.0f) {}
+        SAKA_DEVICE dval(): v(0.0f), g(0.0f) {}
+        SAKA_DEVICE dval(float x) :v(x), g(0.0f) {}
 
-        void requires_grad()
+        SAKA_DEVICE void requires_grad()
         {
             g = 1.0f;
         }
@@ -20,7 +26,7 @@ namespace saka
     namespace details
     {
         template <class F, class dFdx>
-        inline dval unary(dval x, F f, dFdx dfdx)
+        SAKA_DEVICE inline dval unary(dval x, F f, dFdx dfdx)
         {
             dval u;
             u.v = f(x.v);
@@ -29,7 +35,7 @@ namespace saka
         }
 
         template <class F, class dFdx, class dFdy>
-        inline dval binary(dval x, dval y, F f, dFdx dfdx, dFdy dfdy)
+        SAKA_DEVICE inline dval binary(dval x, dval y, F f, dFdx dfdx, dFdy dfdy)
         {
             dval u;
             u.v = f(x.v, y.v);
@@ -37,7 +43,7 @@ namespace saka
             return u;
         }
     }
-    inline dval operator+(dval x, dval y)
+    SAKA_DEVICE inline dval operator+(dval x, dval y)
     {
         return details::binary(x, y,
             [](float x, float y) { return x + y; },
@@ -45,21 +51,21 @@ namespace saka
             [](float x, float y) { return 1.0f; }  // df/dy
         );
     }
-    inline dval operator-(dval x)
+    SAKA_DEVICE inline dval operator-(dval x)
     {
         return details::unary(x,
             [](float x) { return -x; },
             [](float x) { return -1.0f; });
     }
 
-    inline dval operator-(dval x, dval y)
+    SAKA_DEVICE inline dval operator-(dval x, dval y)
     {
         return details::binary(x, y,
             [](float x, float y) { return x - y; },
             [](float x, float y) { return +1.0f; },
             [](float x, float y) { return -1.0f; });
     }
-    inline dval operator*(dval x, dval y)
+    SAKA_DEVICE inline dval operator*(dval x, dval y)
     {
         return details::binary(x, y,
             [](float x, float y) { return x * y; },
@@ -67,21 +73,21 @@ namespace saka
             [](float x, float y) { return x; }  // df/dy
         );
     }
-    inline dval operator/(dval x, dval y)
+    SAKA_DEVICE inline dval operator/(dval x, dval y)
     {
         return details::binary(x, y,
             [](float x, float y) { return x / y; },
             [](float x, float y) { return 1.0f / y; },
             [](float x, float y) { return -x / (y * y); });
     }
-    inline dval exp(dval x)
+    SAKA_DEVICE inline dval exp(dval x)
     {
         return details::unary(x, 
             [](float x) { return expf(x); }, 
             [](float x) { return expf(x); } // df/dx
         );
     }
-    inline dval sqrt(dval x)
+    SAKA_DEVICE inline dval sqrt(dval x)
     {
         return details::unary(x, 
             [](float x) { return sqrtf(x); }, 
@@ -96,18 +102,18 @@ namespace saka
         dval z;
     };
 
-    inline dval3 make_dval3(dval x, dval y, dval z)
+    SAKA_DEVICE inline dval3 make_dval3(dval x, dval y, dval z)
     {
         return { x, y, z };
     }
 
     template <class T>
-    inline dval3 make_dval3(T v)
+    SAKA_DEVICE inline dval3 make_dval3(T v)
     {
         return { v.x, v.y, v.z };
     }
 
-    inline dval3 operator+(dval3 a, dval3 b)
+    SAKA_DEVICE inline dval3 operator+(dval3 a, dval3 b)
     {
         return {
             a.x + b.x,
@@ -116,7 +122,7 @@ namespace saka
         };
     }
 
-    inline dval3 operator-(dval3 a)
+    SAKA_DEVICE inline dval3 operator-(dval3 a)
     {
         return {
             -a.x,
@@ -124,7 +130,7 @@ namespace saka
             -a.z
         };
     }
-    inline dval3 operator-(dval3 a, dval3 b)
+    SAKA_DEVICE inline dval3 operator-(dval3 a, dval3 b)
     {
         return {
             a.x - b.x,
@@ -133,7 +139,7 @@ namespace saka
         };
     }
 
-    inline dval3 operator*(dval3 a, dval s)
+    SAKA_DEVICE inline dval3 operator*(dval3 a, dval s)
     {
         return {
             a.x * s,
@@ -141,7 +147,7 @@ namespace saka
             a.z * s
         };
     }
-    inline dval3 operator*(dval3 a, dval3 b)
+    SAKA_DEVICE inline dval3 operator*(dval3 a, dval3 b)
     {
         return {
             a.x * b.x,
@@ -149,7 +155,7 @@ namespace saka
             a.z * b.z
         };
     }
-    inline dval3 operator/(dval3 a, dval s)
+    SAKA_DEVICE inline dval3 operator/(dval3 a, dval s)
     {
         return {
             a.x / s,
@@ -158,16 +164,16 @@ namespace saka
         };
     }
 
-    inline dval dot(dval3 a, dval3 b)
+    SAKA_DEVICE inline dval dot(dval3 a, dval3 b)
     {
         return a.x * b.x + a.y * b.y + a.z * b.z;
     }
-    inline dval3 normalize(dval3 p)
+    SAKA_DEVICE inline dval3 normalize(dval3 p)
     {
         auto len = sqrt(dot(p, p));
         return p / len;
     }
-    inline dval3 cross(dval3 a, dval3 b)
+    SAKA_DEVICE inline dval3 cross(dval3 a, dval3 b)
     {
         return {
             a.y * b.z - a.z * b.y,
@@ -176,17 +182,17 @@ namespace saka
         };
     }
 
-    inline saka::dval3 reflection(saka::dval3 wi, saka::dval3 n)
+    SAKA_DEVICE inline dval3 reflection(dval3 wi, dval3 n)
     {
         return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
     }
 
-    inline saka::dval3 refraction_norm_free(saka::dval3 wi, saka::dval3 n, float eta /* = eta_t / eta_i */)
+    SAKA_DEVICE inline dval3 refraction_norm_free(dval3 wi, dval3 n, float eta /* = eta_t / eta_i */)
     {
-        saka::dval NoN = dot(n, n);
-        saka::dval WIoN = dot(wi, n);
-        saka::dval WoW = dot(wi, wi);
-        saka::dval k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
+        dval NoN = dot(n, n);
+        dval WIoN = dot(wi, n);
+        dval WoW = dot(wi, wi);
+        dval k = NoN * WoW * (eta * eta - 1.0f) + WIoN * WIoN;
         if (k.v < 0.0f) // adhoc..
         {
             return { 0.0f, 0.0f, 0.0f };
