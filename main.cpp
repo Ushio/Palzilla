@@ -1491,7 +1491,7 @@ int main() {
         // Rendering
 #if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
-        static glm::vec3 p_light = { 0, 1, 1 };
+        static glm::vec3 p_light = { -2.25105f, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
@@ -1711,10 +1711,16 @@ int main() {
 
         printf("occ %f\n", (float)totalPath / CACHE_STORAGE_COUNT);
 
-        //for (int j = 0; j < image.height(); ++j)
+        //for (int j = 0; j < image.height(); ++j){
         ParallelFor(image.height(), [&](int j) {
             for (int i = 0; i < image.width(); ++i)
             {
+                bool debugPixel = i == 533 && j == 368;
+                //if (!debugPixel)
+                //{
+                //    continue;
+                //}
+
                 glm::vec3 ro, rd;
                 rayGenerator.shoot(&ro, &rd, i, j, 0.5f, 0.5f);
 
@@ -1947,6 +1953,7 @@ int main() {
                     255 * powf(color.x, 1.0f / 2.2f), 
                     255 * powf(color.y, 1.0f / 2.2f), 
                     255 * powf(color.z, 1.0f / 2.2f), 255};
+
             };
         }
         );
@@ -1955,6 +1962,20 @@ int main() {
 
         texture->upload(image);
 
+        //pr::PrimBegin(pr::PrimitiveMode::Lines);
+
+        //for (auto tri : polygonSoup.triangles)
+        //{
+        //    for (int j = 0; j < 3; ++j)
+        //    {
+        //        float3 v0 = tri.vs[j];
+        //        float3 v1 = tri.vs[(j + 1) % 3];
+        //        pr::PrimVertex(to(v0), { 255, 255, 255 });
+        //        pr::PrimVertex(to(v1), { 255, 255, 255 });
+        //    }
+        //}
+
+        //pr::PrimEnd();
 #endif
 
         PopGraphicState();
@@ -1976,6 +1997,11 @@ int main() {
         //    param_a = 0.3f;
         //    param_b = 0.3f;
         //}
+
+        if (ImGui::Button("save"))
+        {
+            image.saveAsPng("test.png");
+        }
 
         ImGui::End();
 

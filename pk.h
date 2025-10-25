@@ -398,6 +398,10 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
                 if (inMedium)
                 {
                     wo = saka::refraction_norm_free(wi, -n, 1.0f / eta);
+                    if (wo.x.v == 0.0f && wo.y.v == 0.0f && wo.z.v == 0.0f)
+                    {
+                        return 3.402823466e+38f;
+                    }
                 }
                 else
                 {
