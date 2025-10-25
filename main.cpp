@@ -1787,11 +1787,11 @@ int main() {
 
                 //        if (converged )
                 //        {
-                //            bool contributable = contributablePath<1>(
+                //            bool throughput = contributableThroughput<1>(
                 //                parameters, p, to(p_light), &tri, &attrib, eDescriptor,
                 //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
-                //            if (contributable)
+                //            if (0.0f < throughput)
                 //            {
                 //                minimum_lbvh::Triangle firstTri = tri;
                 //                float3 e0 = firstTri.vs[1] - firstTri.vs[0];
@@ -1800,7 +1800,7 @@ int main() {
                 //                
                 //                //float dAdwValue = 1.0f;
                 //                float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, eDescriptor, 1, eta);
-                //                L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
+                //                L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
                 //            }
                 //        }
                 //    });
@@ -1840,16 +1840,16 @@ int main() {
 
                     if (converged)
                     {
-                        bool contributable = contributablePath<1>(
+                        float throughput = contributableThroughput<1>(
                             parameters, to(p_light), p, tris, attribs, eDescriptor,
                             polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
-                        if (contributable)
+                        if (0.0f < throughput)
                         {
                             float3 firstHit = getVertex(0, tris, parameters);
 
                             float dAdwValue = dAdw(to(p_light), firstHit - to(p_light), p, tris, attribs, eDescriptor, 1, eta);
-                            L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
+                            L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
                         }
                     }
                 }
