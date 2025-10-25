@@ -135,3 +135,13 @@ project "unittest"
         targetname ("Unittest")
         optimize "Full"
     filter{}
+
+project "copying"    
+    kind "ConsoleApp"
+    language "C++"
+    targetdir "bin/"
+    systemversion "latest"
+    flags { "MultiProcessorCompile", "NoPCH" }
+    postbuildcommands { 
+        "{COPYFILE} ../libs/orochi/contrib/bin/win64/*.dll ../bin"
+    }
