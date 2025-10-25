@@ -5,6 +5,7 @@
 #include "minimum_lbvh.h"
 
 #define MIN_VERTEX_DIST 1.0e-3f
+//#define ENABLE_PATH_CUTS 
 
 enum class Material
 {
@@ -466,6 +467,8 @@ struct InternalNormalBound
     minimum_lbvh::AABB normalBounds[2];
     uint32_t counter;
 };
+
+#if defined(ENABLE_PATH_CUTS)
 
 inline interval::intr3 toIntr3(minimum_lbvh::AABB aabb)
 {
@@ -975,6 +978,8 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
         currentNode = stack.top(); stack.pop();
     }
 }
+
+#endif
 
 inline uint32_t hash_combine(uint32_t seed, uint32_t h)
 {

@@ -72,6 +72,20 @@ project "main_gpu"
         links { "prlib" }
     filter{}
 
+    -- Orochi
+    includedirs { "libs/orochi" }
+    files { "libs/orochi/Orochi/Orochi.h" }
+    files { "libs/orochi/Orochi/Orochi.cpp" }
+    includedirs { "libs/orochi/contrib/hipew/include" }
+    files { "libs/orochi/contrib/hipew/src/hipew.cpp" }
+    includedirs { "libs/orochi/contrib/cuew/include" }
+    files { "libs/orochi/contrib/cuew/src/cuew.cpp" }
+    links { "version" }
+    
+    -- Cuda
+    defines {"OROCHI_ENABLE_CUEW"}
+    includedirs {"$(CUDA_PATH)/include"}
+
     symbols "On"
 
     filter {"Debug"}
