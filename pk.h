@@ -24,6 +24,7 @@ inline float3 reflection(float3 wi, float3 n)
     return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
 }
 
+// dot(n, wi) must be positive
 inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     float c = dot(n, wi);
     float k = eta * eta - 1.0f + c * c;
@@ -39,6 +40,7 @@ inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     return 0.5f * sqr(gmc / gpc) * (1.0f + sqr((c * gpc - 1.0f) / (c * gmc + 1.0f)));
 }
 
+// dot(n, wi) must be positive
 inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     float nn = dot(n, n);
     float wiwi = dot(wi, wi);
@@ -255,6 +257,13 @@ inline bool occluded(
     minimum_lbvh::intersect_stackfree(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
     return hit.t < 1.0f;
 }
+inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[])
+{
+    minimum_lbvh::Triangle tri = tris[k];
+    float3 e0 = tri.vs[1] - tri.vs[0];
+    float3 e1 = tri.vs[2] - tri.vs[0];
+    return tri.vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
+}
 
 template <int K>
 inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, const minimum_lbvh::InternalNode* nodes, const minimum_lbvh::Triangle* sceneTriangles, minimum_lbvh::NodeIndex node )
@@ -277,10 +286,7 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
         }
 
         minimum_lbvh::Triangle tri = tris[k];
-
-        float3 e0 = tri.vs[1] - tri.vs[0];
-        float3 e1 = tri.vs[2] - tri.vs[0];
-        vertices[k + 1] = tri.vs[0] + e0 * param_u + e1 * param_v;
+        vertices[k + 1] = getVertex(k, tris, parameters);
 
         TriangleAttrib attrib = attribs[k];
         float3 ne0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
@@ -291,6 +297,7 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
     shadingNormals[0] = normalize(vertices[1] - vertices[0]);
     shadingNormals[K + 1] = normalize(vertices[K] - vertices[K + 1]);
 
+    //float throughput = 1.0f;
     for (int k = 0; k < K; k++)
     {
         float3 wi = vertices[k] - vertices[k + 1];
@@ -330,14 +337,6 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
         }
     }
     return true;
-}
-
-inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[])
-{
-    minimum_lbvh::Triangle tri = tris[k];
-    float3 e0 = tri.vs[1] - tri.vs[0];
-    float3 e1 = tri.vs[2] - tri.vs[0];
-    return tri.vs[0] + e0 * parameters[k * 2 + 0] + e1 * parameters[k * 2 + 1];
 }
 
 inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, EventDescriptor eDescriptor, int nEvent, float eta )

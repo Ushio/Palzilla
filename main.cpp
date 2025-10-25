@@ -1491,7 +1491,7 @@ int main() {
         // Rendering
 #if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
-        static glm::vec3 p_light = { -2.25105f, 1, 1 };
+        static glm::vec3 p_light = { 0, 1, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
