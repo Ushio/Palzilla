@@ -583,6 +583,7 @@ int main() {
         //}
 
         // float3 wo = normalize(refraction(wi, normalize(to(N)), eta));
+
         float3 wo;
         if (refraction_norm_free(&wo, wi_unnormalized, to(N), eta))
         {
@@ -597,30 +598,31 @@ int main() {
             DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
         }
 
-        //if (1)
-        //{
-        //    DrawGrid(GridAxis::XY, 1.0f, 10, { 128, 128, 128 });
+        if (1)
+        {
+            DrawGrid(GridAxis::XY, 1.0f, 10, { 128, 128, 128 });
 
-        //    float eta = 1.96346688f;
-        //    int N = 1000;
-        //    for (int i = 0; i < N; i++)
-        //    {
-        //        glm::vec3 n = { 0, 3, 0 };
-        //        glm::vec3 wi = glm::angleAxis( glm::pi<float>() * 0.5f * i / N, glm::vec3(0.0f, 0.0f, 1.0f)) * n * 0.4f;
+            float eta = 1.96346688f;
+            int N = 1000;
+            for (int i = 0; i < N; i++)
+            {
+                glm::vec3 n = { 0, 3, 0 };
+                glm::vec3 wi = glm::angleAxis( glm::pi<float>() * 0.5f * i / N, glm::vec3(0.0f, 0.0f, 1.0f)) * n * 0.4f;
 
-        //        float R = fresnel_exact_norm_free(to(wi), to(n), eta);
-        //        float T = 1.0f - R;
-        //        float x = (float)i / N;
-        //        DrawPoint({ x, R, 0 }, { 255, 255, 255 }, 3);
+                float R = fresnel_exact_norm_free(to(wi), -to(n), eta);
+                float T = 1.0f - R;
+                float x = (float)i / N;
+                DrawPoint({ x, R, 0 }, { 255, 255, 255 }, 3);
 
-        //        float3 wo = refraction_norm_free(to(wi), to(n), eta);
+                float3 wo;
+                refraction_norm_free(&wo, to(wi), to(n), eta);
 
-        //        float T_inv = 1.0f - fresnel_exact_norm_free(wo, to(-n), 1.0f / eta);
-        //        // printf("%f %f\n", T, T_inv);
-        //    }
-        //}
+                float T_inv = 1.0f - fresnel_exact_norm_free(wo, to(-n), 1.0f / eta);
+                // printf("%f %f\n", T, T_inv);
+            }
+        }
 
-        if(1)
+        if(0)
         {
             PCG rng;
 
@@ -1040,7 +1042,7 @@ int main() {
                 {
                     bool contributable = contributablePath<K>(
                         parameters, to(P0), to(P2), tris, attribs, eDescriptor,
-                        polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+                        polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
                     if (contributable)
                     {
@@ -1787,7 +1789,7 @@ int main() {
                 //        {
                 //            bool contributable = contributablePath<1>(
                 //                parameters, p, to(p_light), &tri, &attrib, eDescriptor,
-                //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+                //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
                 //            if (contributable)
                 //            {
@@ -1840,7 +1842,7 @@ int main() {
                     {
                         bool contributable = contributablePath<1>(
                             parameters, to(p_light), p, tris, attribs, eDescriptor,
-                            polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+                            polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
                         if (contributable)
                         {
@@ -1891,7 +1893,7 @@ int main() {
                 //        {
                 //            bool contributable = contributablePath<K>(
                 //                parameters, to(p_light), p, tris, attribs, eDescriptor,
-                //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+                //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
                 //            if (contributable)
                 //            {
@@ -1933,14 +1935,14 @@ int main() {
 
                     if (converged)
                     {
-                        bool contributable = contributablePath<K>(
+                        float throughput = contributableThroughput<K>(
                             parameters, to(p_light), p, tris, attribs, eDescriptor,
-                            polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode);
+                            polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
-                        if (contributable)
+                        if (0.0f < throughput)
                         {
                             float dAdwValue = dAdw(to(p_light), getVertex(0, tris, parameters) - to(p_light), p, tris, attribs, eDescriptor, K, eta);
-                            L += reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+                            L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
                         }
                     }
                 }
@@ -1988,7 +1990,7 @@ int main() {
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
-        ImGui::InputInt("terminationCount", &terminationCount);
+        //ImGui::InputInt("terminationCount", &terminationCount);
         
         //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
         //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
@@ -1998,10 +2000,10 @@ int main() {
         //    param_b = 0.3f;
         //}
 
-        if (ImGui::Button("save"))
-        {
-            image.saveAsPng("test.png");
-        }
+        //if (ImGui::Button("save"))
+        //{
+        //    image.saveAsPng("test.png");
+        //}
 
         ImGui::End();
 

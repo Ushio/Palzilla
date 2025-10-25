@@ -24,9 +24,15 @@ inline float3 reflection(float3 wi, float3 n)
     return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
 }
 
-// dot(n, wi) must be positive
+// normal dir defines in-out of the medium
 inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     float c = dot(n, wi);
+    if (c < 0.0f)
+    {
+        c = -c;
+        n = -n;
+        eta = 1.0f / eta;
+    }
     float k = eta * eta - 1.0f + c * c;
     if (k < 0.0f)
     {
@@ -40,11 +46,19 @@ inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     return 0.5f * sqr(gmc / gpc) * (1.0f + sqr((c * gpc - 1.0f) / (c * gmc + 1.0f)));
 }
 
-// dot(n, wi) must be positive
+// normal dir defines in-out of the medium
 inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     float nn = dot(n, n);
     float wiwi = dot(wi, wi);
     float C = dot(n, wi);
+
+    if( C < 0.0f )
+    {
+        C = -C;
+        n = -n;
+        eta = 1.0f / eta;
+    }
+
     float K = nn * wiwi * (eta * eta - 1.0f) + C * C;
     if (K < 0.0f)
     {
@@ -266,7 +280,7 @@ inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[]
 }
 
 template <int K>
-inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, const minimum_lbvh::InternalNode* nodes, const minimum_lbvh::Triangle* sceneTriangles, minimum_lbvh::NodeIndex node )
+inline float contributableThroughput(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, const minimum_lbvh::InternalNode* nodes, const minimum_lbvh::Triangle* sceneTriangles, minimum_lbvh::NodeIndex node, float eta )
 {
     float3 vertices[K + 2];
     vertices[0] = p_beg;
@@ -282,7 +296,7 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
         // out side of triangle
         if (param_u < 0.0f || param_v < 0.0f || 1.0f < param_u + param_v)
         {
-            return false;
+            return 0.0f;
         }
 
         minimum_lbvh::Triangle tri = tris[k];
@@ -297,17 +311,28 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
     shadingNormals[0] = normalize(vertices[1] - vertices[0]);
     shadingNormals[K + 1] = normalize(vertices[K] - vertices[K + 1]);
 
-    //float throughput = 1.0f;
+    float throughput = 1.0f;
     for (int k = 0; k < K; k++)
     {
         float3 wi = vertices[k] - vertices[k + 1];
         float3 wo = vertices[k + 2] - vertices[k + 1];
         float3 n = shadingNormals[k + 1];
-
         Event e = 0.0f < dot(wi, n) * dot(wo, n) ? Event::R : Event::T;
         if (eDescriptor.get(k) != e)
         {
-            return false; // invalid event
+            return 0.0f; // invalid event
+        }
+        float3 ng = minimum_lbvh::unnormalizedNormalOf(tris[k]);
+        Event eg = 0.0f < dot(wi, ng) * dot(wo, ng) ? Event::R : Event::T;
+        if (e != eg)
+        {
+            return 0.0f; // inconsistent
+        }
+
+        if (attribs[k].material == Material::Dielectric)
+        {
+            float reflectance = fresnel_exact_norm_free(wi, n, eta);
+            throughput *= e == Event::R ? reflectance : 1.0f - reflectance;
         }
     }
 
@@ -320,7 +345,7 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
         float3 d = v0 - v1;
         if (dot(d, d) < eps)
         {
-            return false;
+            return 0.0f;
         }
     }
 
@@ -333,10 +358,10 @@ inline bool contributablePath(float parameters[K * 2], float3 p_beg, float3 p_en
         float3 n1 = shadingNormals[i + 1];
         if (occluded(nodes, sceneTriangles, node, v0, n0, v1, n1))
         {
-            return false;
+            return 0.0f;
         }
     }
-    return true;
+    return throughput;
 }
 
 inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, EventDescriptor eDescriptor, int nEvent, float eta )
