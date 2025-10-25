@@ -1521,21 +1521,9 @@ int main() {
 
         PCG rng;
 
-        const float spacial_step = 0.05f;
-        auto spacial_hash = [](float3 p, float spacial_step) {
-            float3 index = (p / spacial_step);
-            int x = index.x;
-            int y = index.y;
-            int z = index.z;
+        const float spacial_step = 0.025f;
 
-            uint32_t h = 12345;
-            h = hash_combine(h, x * 2654435761);
-            h = hash_combine(h, y * 805459861);
-            h = hash_combine(h, z * 3674653429);
-            return h | 1u;
-        };
-
-        static int terminationCount = 128;
+        static int terminationCount = 32;
 
         // ray trace
 #if 0
@@ -1669,33 +1657,39 @@ int main() {
                     }
                     hashOfPath |= 1u;
 
-                    // linear probing
-                    float3 jittering = {
-                        spacial_step * lerp(-0.1f, 0.1f, rng.uniformf()),
-                        spacial_step * lerp(-0.1f, 0.1f, rng.uniformf()),
-                        spacial_step * lerp(-0.1f, 0.1f, rng.uniformf()),
-                    };
-                    uint32_t hashOfP = spacial_hash(p_final + jittering, spacial_step);
-                    uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
-                    for (int offset = 0 ; offset < CACHE_STORAGE_COUNT ; offset++)
+                    float3 indexf = (p_final / spacial_step);
+                    int x = floorf(indexf.x);
+                    int y = floorf(indexf.y);
+                    int z = floorf(indexf.z);
+                    int dx = indexf.x - x < 0.5f ? -1 : 1;
+                    int dy = indexf.y - y < 0.5f ? -1 : 1;
+                    int dz = indexf.z - z < 0.5f ? -1 : 1;
+                    for (int iz = 0; iz < 2; iz++)
+                    for (int iy = 0; iy < 2; iy++)
+                    for (int ix = 0; ix < 2; ix++)
                     {
-                        uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
-                        if (pathHashes[index] == 0) // empty
+                        uint32_t hashOfP = hash_of_iP(x + ix * dx, y + iy * dy, z + iz * dz);
+                        uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
+                        for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
                         {
-                            pathHashes[index] = hashOfPath;
-                            pathes[index].hashOfP = hashOfP;
-                            for (int d = 0; d < K; d++)
+                            uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
+                            if (pathHashes[index] == 0) // empty
                             {
-                                pathes[index].tris[d] = tris[d];
-                            }
-                            success = true;
+                                pathHashes[index] = hashOfPath;
+                                pathes[index].hashOfP = hashOfP;
+                                for (int d = 0; d < K; d++)
+                                {
+                                    pathes[index].tris[d] = tris[d];
+                                }
+                                success = true;
 
-                            totalPath++;
-                            break;
-                        }
-                        else if (pathHashes[index] == hashOfPath)
-                        {
-                            break; // existing
+                                totalPath++;
+                                break;
+                            }
+                            else if (pathHashes[index] == hashOfPath)
+                            {
+                                break; // existing
+                            }
                         }
                     }
                 }
@@ -1855,7 +1849,7 @@ int main() {
 #else
                 int numberOfNewton = 0;
 
-                //// refraction 2 levels
+                // refraction 2 levels
                 //EventDescriptor eDescriptor;
                 //eDescriptor.set(0, Event::T);
                 //eDescriptor.set(1, Event::T);

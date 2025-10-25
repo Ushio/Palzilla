@@ -4,7 +4,7 @@
 #include "sen.h"
 #include "minimum_lbvh.h"
 
-#define MIN_VERTEX_DIST 1.0e-4f
+#define MIN_VERTEX_DIST 1.0e-3f
 
 enum class Material
 {
@@ -951,4 +951,19 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
 inline uint32_t hash_combine(uint32_t seed, uint32_t h)
 {
     return h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+inline uint32_t hash_of_iP(int x, int y, int z)
+{
+    uint32_t h = 12345;
+    h = hash_combine(h, x * 2654435761);
+    h = hash_combine(h, y * 805459861);
+    h = hash_combine(h, z * 3674653429);
+    return h | 1u;
+}
+inline uint32_t spacial_hash(float3 p, float spacial_step) {
+    float3 indexf = (p / spacial_step);
+    int x = floorf(indexf.x);
+    int y = floorf(indexf.y);
+    int z = floorf(indexf.z);
+    return hash_of_iP(x, y, z);
 }
