@@ -132,21 +132,6 @@ struct Adam
     }
 };
 
-inline float2 square2triangle(float2 square)
-{ 
-    if (square.y > square.x) 
-    {
-        square.x *= 0.5f; 
-        square.y -= square.x;
-    } 
-    else 
-    {
-        square.y *= 0.5f;
-        square.x -= square.y;
-    }
-    return square;
-}
-
 struct PolygonSoup
 {
     minimum_lbvh::BVHCPUBuilder builder;

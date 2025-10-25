@@ -123,6 +123,123 @@ extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGener
     accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }
 
+template <int K>
+__device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, float3* debugPoints, int* debugPointCount)
+{
+    int iTri = blockIdx.x;
+    if (attribs[iTri].material == Material::Diffuse)
+    {
+        return;
+    }
+
+    minimum_lbvh::Triangle tri = triangles[iTri];
+
+    float2 params = {};
+    sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, threadIdx.x, 123, 456, 789);
+    params = square2triangle(params);
+
+    float3 e0 = tri.vs[1] - tri.vs[0];
+    float3 e1 = tri.vs[2] - tri.vs[0];
+    float3 p = tri.vs[0] + e0 * params.x + e1 * params.y;
+
+    float3 ro = p_light;
+    float3 rd = p - p_light;
+
+    bool inMedium = false;
+    bool admissiblePath = false;
+    int tris[K];
+    int cacheTo = -1;
+    float3 p_final;
+    for (int d = 0; d < K + 1; d++)
+    {
+        minimum_lbvh::Hit hit;
+        minimum_lbvh::intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd));
+        if (hit.t == MINIMUM_LBVH_FLT_MAX)
+        {
+            break;
+        }
+        TriangleAttrib attrib = attribs[hit.triangleIndex];
+        Material m = attrib.material;
+        float3 p_hit = ro + rd * hit.t;
+
+        float3 ns =
+            attrib.shadingNormals[0] +
+            (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
+            (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
+        float3 ng = dot(ns, hit.ng) < 0.0f ? -hit.ng : hit.ng; // aligned
+
+        if (d == K)
+        {
+            if (m == Material::Diffuse)
+            {
+                // store 
+                admissiblePath = true;
+                cacheTo = hit.triangleIndex;
+                p_final = p_hit;
+            }
+            break;
+        }
+        if (eDescriptor.get(d) == Event::R && (m == Material::Mirror || m == Material::Dielectric))
+        {
+            tris[d] = hit.triangleIndex;
+
+            float3 wi = -rd;
+            float3 wo = reflection(wi, ns);
+
+            if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
+            {
+                float3 ng_norm = normalize(ng);
+                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                rd = wo;
+                continue;
+            }
+        }
+        if (eDescriptor.get(d) == Event::T && m == Material::Dielectric)
+        {
+            tris[d] = hit.triangleIndex;
+
+            float3 wi = -rd;
+            float3 wo;
+
+            if (inMedium)
+            {
+                if (refraction_norm_free(&wo, wi, dot(ns, wi) < 0.0f ? -ns : ns, 1.0f / eta) == false)
+                {
+                    break;
+                }
+            }
+            else
+            {
+                if (refraction_norm_free(&wo, wi, dot(ns, wi) < 0.0f ? -ns : ns, eta) == false)
+                {
+                    break;
+                }
+            }
+            inMedium = !inMedium;
+
+            if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
+            {
+                float3 ng_norm = normalize(ng);
+                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                rd = wo;
+                continue;
+            }
+        }
+        break;
+    }
+
+    if (admissiblePath)
+    {
+        int index = atomicAdd(debugPointCount, 1);
+        debugPoints[index] = p_final;
+    }
+}
+
+extern "C" __global__ void photonTrace_K2( const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, float3 *debugPoints, int* debugPointCount)
+{
+    photonTrace<2>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, debugPoints, debugPointCount);
+}
+
 extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;

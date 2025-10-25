@@ -57,16 +57,74 @@ PK_DEVICE inline bool occluded(
     return hit.t < 1.0f;
 }
 
+enum class Event
+{
+    R = 0,
+    T = 1
+};
+struct EventDescriptor
+{
+    PK_DEVICE EventDescriptor() : m_events(0) {}
+
+    PK_DEVICE Event get(uint32_t index) const {
+        bool setbit = m_events & (1u << index);
+        return setbit ? Event::T : Event::R;
+    }
+    PK_DEVICE void set(uint32_t index, Event e)
+    {
+        m_events &= ~(1u << index);
+        if (e == Event::T)
+        {
+            m_events |= 1u << index;
+        }
+    }
+    uint32_t m_events;
+};
+
+// ALow-DistortionMapBetweenTriangleandSquare
+PK_DEVICE inline float2 square2triangle(float2 square)
+{
+    if (square.y > square.x)
+    {
+        square.x *= 0.5f;
+        square.y -= square.x;
+    }
+    else
+    {
+        square.y *= 0.5f;
+        square.x -= square.y;
+    }
+    return square;
+}
+PK_DEVICE inline bool refraction_norm_free(float3* wo, float3 wi, float3 n, float eta /* = eta_t / eta_i */)
+{
+    float NoN = dot(n, n);
+    float WIoN = dot(wi, n);
+    if (WIoN < 0.0f)
+    {
+        return false;
+    }
+
+    float WIoWI = dot(wi, wi);
+    float k = NoN * WIoWI * (eta * eta - 1.0f) + WIoN * WIoN;
+    if (k < 0.0f)
+    {
+        return false;
+    }
+    *wo = -wi * NoN + (WIoN - sqrtf(k)) * n;
+    return true;
+}
+
+PK_DEVICE inline float3 reflection(float3 wi, float3 n)
+{
+    return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
+}
 #if !defined(PK_KERNELCC)
 
 #include <math.h>
 #include "saka.h"
 #include "sen.h"
 
-inline float3 reflection(float3 wi, float3 n)
-{
-    return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
-}
 
 // normal dir defines in-out of the medium
 inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
@@ -116,25 +174,6 @@ inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / e
     return 0.5f * sqr(GmC / GpC) * (1.0f + sqr((C * GpC - nn * wiwi) / (C * GmC + nn * wiwi)));
 }
 
-inline bool refraction_norm_free(float3 *wo, float3 wi, float3 n, float eta /* = eta_t / eta_i */)
-{
-    float NoN = dot(n, n);
-    float WIoN = dot(wi, n);
-    if (WIoN < 0.0f)
-    {
-        return false;
-    }
-
-    float WIoWI = dot(wi, wi);
-    float k = NoN * WIoWI * (eta * eta - 1.0f) + WIoN * WIoN;
-    if (k < 0.0f)
-    {
-        return false;
-    }
-    *wo = -wi * NoN + (WIoN - sqrtf(k)) * n;
-    return true;
-}
-
 // Building an Orthonormal Basis, Revisited
 void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
     const float sign = copysignf(1.0f, zaxis.z);
@@ -146,30 +185,6 @@ void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
 
 struct SolverEmptyCallback {
     void operator()( int iter, bool converged ) const{}
-};
-
-enum class Event
-{
-    R = 0,
-    T = 1
-};
-struct EventDescriptor
-{
-    EventDescriptor() : m_events(0) {}
-
-    Event get(uint32_t index) const {
-        bool setbit = m_events & (1u << index);
-        return setbit ? Event::T : Event::R;
-    }
-    void set(uint32_t index, Event e)
-    {
-        m_events &= ~(1u << index);
-        if (e == Event::T)
-        {
-            m_events |= 1u << index;
-        }
-    }
-    uint32_t m_events;
 };
 
 // parameters: output barycentric coordinates

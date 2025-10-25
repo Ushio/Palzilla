@@ -25,6 +25,38 @@ inline float3 to(glm::vec3 p)
     return { p.x, p.y, p.z };
 }
 
+class DeviceStopwatch
+{
+public:
+    DeviceStopwatch(oroStream stream)
+    {
+        m_stream = stream;
+        oroEventCreateWithFlags(&m_start, oroEventDefault);
+        oroEventCreateWithFlags(&m_stop, oroEventDefault);
+    }
+    ~DeviceStopwatch()
+    {
+        oroEventDestroy(m_start);
+        oroEventDestroy(m_stop);
+    }
+    DeviceStopwatch(const DeviceStopwatch&) = delete;
+    void operator=(const DeviceStopwatch&) = delete;
+
+    void start() { oroEventRecord(m_start, m_stream); }
+    void stop() { oroEventRecord(m_stop, m_stream); }
+
+    float getElapsedMs() const
+    {
+        oroEventSynchronize(m_stop);
+        float ms = 0;
+        oroEventElapsedTime(&ms, m_start, m_stop);
+        return ms;
+    }
+private:
+    oroStream m_stream;
+    oroEvent m_start;
+    oroEvent m_stop;
+};
 
 int main()
 {
@@ -140,6 +172,11 @@ int main()
     triangleAttribsDevice << triangleAttribs;
     gpuBuilder.build(trianglesDevice.data(), trianglesDevice.size(), 0, onesweep, 0 /*stream*/);
 
+    TypedBuffer<float3> debugPoints(TYPED_BUFFER_DEVICE);
+    TypedBuffer<int> debugPointCount(TYPED_BUFFER_DEVICE);
+    debugPoints.allocate(1 << 22);
+    debugPointCount.allocate(1);
+
     ITexture* texture = CreateTexture();
 
     Camera3D camera;
@@ -210,6 +247,48 @@ int main()
 
         RayGenerator rayGenerator;
         rayGenerator.lookat(to(camera.origin), to(camera.lookat), to(camera.up), camera.fovy, imageWidth, imageHeight);
+
+        oroMemsetD32(debugPointCount.data(), 0, 1);
+
+        EventDescriptor eDescriptor;
+        eDescriptor.set(0, Event::T);
+        eDescriptor.set(1, Event::T);
+        float eta = 1.5f;
+
+        DeviceStopwatch sw(0);
+        sw.start();
+
+        shader.launch("photonTrace_K2",
+            ShaderArgument()
+            .value(gpuBuilder.m_rootNode)
+            .value(gpuBuilder.m_internals)
+            .value(trianglesDevice.data())
+            .value(triangleAttribsDevice.data())
+            .value(to(p_light))
+            .value(eDescriptor)
+            .value(eta)
+            .value(iteration)
+            .value(debugPoints.data())
+            .value(debugPointCount.data()),
+            gpuBuilder.m_nTriangles, 1, 1,
+            32, 1, 1,
+            0
+        );
+
+        sw.stop();
+        printf("photonTrace_K2 %f\n", sw.getElapsedMs());
+
+        // debug view
+        {
+            int nPoints = 0;
+            oroMemcpyDtoH(&nPoints, debugPointCount.data(), sizeof(int));
+            std::vector<float3> points(nPoints);
+            oroMemcpyDtoH(points.data(), debugPoints.data(), sizeof(float3) * nPoints);
+            for (int i = 0; i < nPoints; i++)
+            {
+                DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
+            }
+        }
 
         shader.launch("render",
             ShaderArgument()
