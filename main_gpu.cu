@@ -2,17 +2,11 @@
 #include "helper_math.h"
 #include "camera.h"
 #include "sobol.h"
+#include "pk.h"
 
 using namespace minimum_lbvh;
 
 constexpr float PI = 3.14159265358979323846f;
-
-struct TriangleAttrib
-{
-    float3 shadingNormals[3];
-    float3 reflectance;
-    float3 emissive;
-};
 
 __device__ uint32_t packRGBA( float4 color )
 {
@@ -43,43 +37,6 @@ __device__ void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) 
     *xaxis = { 1.0f + sign * zaxis.x * zaxis.x * a, sign * b, -sign * zaxis.x };
     *yaxis = { b, sign + zaxis.y * zaxis.y * a, -zaxis.y };
 }
-
-/*
- * PCG random number generator from
- * https://www.pcg-random.org/download.html#minimal-c-implementation
- */
-struct PCG
-{
-    __device__ PCG(uint64_t seed, uint64_t sequence)
-    {
-        state = 0U;
-        inc = (sequence << 1u) | 1u;
-
-        uniform();
-        state += seed;
-        uniform();
-    }
-
-    __device__ uint32_t uniform()
-    {
-        uint64_t oldstate = state;
-        state = oldstate * 6364136223846793005ULL + inc;
-        uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
-        uint32_t rot = oldstate >> 59u;
-        return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
-    }
-
-    __device__ float uniformf()
-    {
-        uint32_t bits = (uniform() >> 9) | 0x3f800000;
-        float value;
-        memcpy(&value, &bits, sizeof(float));
-        return value - 1.0f;
-    }
-
-    uint64_t state;  // RNG state.  All values are possible.
-    uint64_t inc;    // Controls which RNG sequence(stream) is selected. Must *always* be odd.
-};
 
 extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles )
 {

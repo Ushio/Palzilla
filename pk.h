@@ -1,11 +1,18 @@
-#include <math.h>
+#pragma once
 #include "helper_math.h"
-#include "saka.h"
-#include "sen.h"
 #include "minimum_lbvh.h"
 
-#define MIN_VERTEX_DIST 1.0e-3f
 //#define ENABLE_PATH_CUTS 
+
+#if ( defined( __CUDACC__ ) || defined( __HIPCC__ ) )
+#define PK_KERNELCC
+#define PK_DEVICE __device__
+#else
+#define PK_DEVICE
+#endif
+
+
+#define MIN_VERTEX_DIST 1.0e-3f
 
 enum class Material
 {
@@ -19,6 +26,42 @@ struct TriangleAttrib
     Material material;
     float3 shadingNormals[3];
 };
+
+PK_DEVICE inline bool occluded(
+    const minimum_lbvh::InternalNode* nodes,
+    const minimum_lbvh::Triangle* triangles,
+    minimum_lbvh::NodeIndex node,
+    float3 from,
+    float3 from_n,
+    float3 to,
+    float3 to_n)
+{
+    if (dot(to - from, from_n) < 0.0f)
+    {
+        from_n = -from_n;
+    }
+    if (dot(from - to, to_n) < 0.0f)
+    {
+        to_n = -to_n;
+    }
+
+    float eps = 1.0e-6f;
+    float3 from_safe = from + from_n * eps;
+    float3 to_safe = to + to_n * eps;
+
+    float3 rd = to_safe - from_safe;
+
+    minimum_lbvh::Hit hit;
+    hit.t = 1.0f;
+    minimum_lbvh::intersect_stackfree(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
+    return hit.t < 1.0f;
+}
+
+#if !defined(PK_KERNELCC)
+
+#include <math.h>
+#include "saka.h"
+#include "sen.h"
 
 inline float3 reflection(float3 wi, float3 n)
 {
@@ -243,35 +286,6 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
     return false;
 }
 
-inline bool occluded(
-    const minimum_lbvh::InternalNode* nodes,
-    const minimum_lbvh::Triangle* triangles,
-    minimum_lbvh::NodeIndex node,
-    float3 from,
-    float3 from_n,
-    float3 to,
-    float3 to_n)
-{
-    if (dot(to - from, from_n) < 0.0f)
-    {
-        from_n = -from_n;
-    }
-    if (dot(from - to, to_n) < 0.0f)
-    {
-        to_n = -to_n;
-    }
-
-    float eps = 1.0e-6f;
-    float3 from_safe = from + from_n * eps;
-    float3 to_safe = to + to_n * eps;
-
-    float3 rd = to_safe - from_safe;
-
-    minimum_lbvh::Hit hit;
-    hit.t = 1.0f;
-    minimum_lbvh::intersect_stackfree(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
-    return hit.t < 1.0f;
-}
 inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[])
 {
     minimum_lbvh::Triangle tri = tris[k];
@@ -1000,3 +1014,5 @@ inline uint32_t spacial_hash(float3 p, float spacial_step) {
     int z = floorf(indexf.z);
     return hash_of_iP(x, y, z);
 }
+
+#endif
