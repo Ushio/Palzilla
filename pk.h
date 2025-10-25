@@ -14,7 +14,7 @@
 
 #define MIN_VERTEX_DIST 1.0e-3f
 
-enum class Material
+enum class Material : int
 {
     Diffuse,
     Mirror,

@@ -65,6 +65,59 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
     }
 }
 
+extern "C" __global__ void render(uint32_t* pixels, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light)
+{
+    int xi = threadIdx.x + blockDim.x * blockIdx.x;
+    int yi = threadIdx.y + blockDim.y * blockIdx.y;
+
+    if ( imageSize.x <= xi || imageSize.y <= yi )
+    {
+        return;
+    }
+
+    int pixel = xi + yi * imageSize.x;
+
+    float3 ro, rd;
+    rayGenerator.shoot(&ro, &rd, (float)xi / imageSize.x, (float)yi / imageSize.y);
+
+    Hit hit;
+    intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, invRd(rd));
+    if (hit.t == MINIMUM_LBVH_FLT_MAX)
+    {
+        pixels[pixel] = packRGBA({ 0, 0, 0, 1 });
+        return;
+    }
+
+    float3 p = ro + rd * hit.t;
+    float3 n = normalize(hit.ng);
+
+    if (0.0f < dot(n, rd))
+    {
+        n = -n;
+    }
+
+    if (attribs[hit.triangleIndex].material != Material::Diffuse)
+    {
+        // handle later
+        pixels[pixel] = packRGBA({ 0, 1, 1, 1 });
+        return;
+    }
+
+    float3 toLight = p_light - p;
+    float d2 = dot(toLight, toLight);
+    float3 reflectance = { 0.75f, 0.75f, 0.75f };
+
+    float3 L = {};
+
+    bool invisible = occluded(internals, triangles, *rootNode, p, n, p_light, { 0, 0, 0 });
+    if (!invisible)
+    {
+        float3 light_intencity = { 1, 1, 1 };
+        L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
+    }
+    pixels[pixel] = packRGBA({ L.x, L.y, L.z, 1 });
+}
+
 extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;

@@ -167,20 +167,25 @@ int main()
             DrawXYZAxis(1.0f);
         }
 
-        pr::PrimBegin(pr::PrimitiveMode::Lines);
+        //pr::PrimBegin(pr::PrimitiveMode::Lines);
 
-        for (auto tri : triangles)
-        {
-            for (int j = 0; j < 3; ++j)
-            {
-                float3 v0 = tri.vs[j];
-                float3 v1 = tri.vs[(j + 1) % 3];
-                pr::PrimVertex(to(v0), { 255, 255, 255 });
-                pr::PrimVertex(to(v1), { 255, 255, 255 });
-            }
-        }
+        //for (auto tri : triangles)
+        //{
+        //    for (int j = 0; j < 3; ++j)
+        //    {
+        //        float3 v0 = tri.vs[j];
+        //        float3 v1 = tri.vs[(j + 1) % 3];
+        //        pr::PrimVertex(to(v0), { 255, 255, 255 });
+        //        pr::PrimVertex(to(v1), { 255, 255, 255 });
+        //    }
+        //}
 
-        pr::PrimEnd();
+        //pr::PrimEnd();
+
+        static glm::vec3 p_light = { 0, 1, 1 };
+        ManipulatePosition(camera, &p_light, 0.3f);
+        DrawText(p_light, "light");
+
 
         int imageWidth = GetScreenWidth();
         int imageHeight = GetScreenHeight();
@@ -196,14 +201,16 @@ int main()
         RayGenerator rayGenerator;
         rayGenerator.lookat(to(camera.origin), to(camera.lookat), to(camera.up), camera.fovy, imageWidth, imageHeight);
 
-        shader.launch("normal",
+        shader.launch("render",
             ShaderArgument()
             .value(pixels.data())
             .value(int2{ imageWidth, imageHeight })
             .value(rayGenerator)
             .value(gpuBuilder.m_rootNode)
             .value(gpuBuilder.m_internals)
-            .value(trianglesDevice.data()),
+            .value(trianglesDevice.data())
+            .value(triangleAttribsDevice.data())
+            .value(to(p_light)),
             div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
             16, 16, 1,
             0
