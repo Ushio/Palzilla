@@ -15,28 +15,19 @@ __device__ uint32_t packRGBA( float4 color )
     return (i4.z << 16) | (i4.y << 8) | i4.x;
 }
 
-__device__ float3 sampleHemisphereCosWeighted(float xi_0, float xi_1)
-{
-    float phi = xi_0 * 2.0f * PI;
-    float r = sqrtf(xi_1);
-
-    // uniform in a circle
-    float x = cosf(phi) * r;
-    float z = sinf(phi) * r;
-
-    // project to hemisphere
-    float y = sqrtf(fmax(1.0f - r * r, 0.0f));
-    return { x, y, z };
-}
-
-// Building an Orthonormal Basis, Revisited
-__device__ void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
-    const float sign = copysignf(1.0f, zaxis.z);
-    const float a = -1.0f / (sign + zaxis.z);
-    const float b = zaxis.x * zaxis.y * a;
-    *xaxis = { 1.0f + sign * zaxis.x * zaxis.x * a, sign * b, -sign * zaxis.x };
-    *yaxis = { b, sign + zaxis.y * zaxis.y * a, -zaxis.y };
-}
+//__device__ float3 sampleHemisphereCosWeighted(float xi_0, float xi_1)
+//{
+//    float phi = xi_0 * 2.0f * PI;
+//    float r = sqrtf(xi_1);
+//
+//    // uniform in a circle
+//    float x = cosf(phi) * r;
+//    float z = sinf(phi) * r;
+//
+//    // project to hemisphere
+//    float y = sqrtf(fmax(1.0f - r * r, 0.0f));
+//    return { x, y, z };
+//}
 
 extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles )
 {
@@ -65,12 +56,12 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
     }
 }
 
-extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, int iteration)
+extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
 
-    if ( imageSize.x <= xi || imageSize.y <= yi )
+    if (imageSize.x <= xi || imageSize.y <= yi)
     {
         return;
     }
@@ -100,7 +91,7 @@ extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGener
         n = -n;
     }
 
-    if (attribs[hit.triangleIndex].material != Material::Diffuse)
+    if (triangleAttribs[hit.triangleIndex].material != Material::Diffuse)
     {
         // handle later
         accumulators[pixel] += {0.0f, 1.0f, 1.0f, 1.0f};
@@ -113,12 +104,43 @@ extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGener
 
     float3 L = {};
 
+    enum
+    {
+        K = 2
+    };
+    float3 light_intencity = { 1, 1, 1 };
+
     bool invisible = occluded(internals, triangles, *rootNode, p, n, p_light, { 0, 0, 0 });
     if (!invisible)
     {
-        float3 light_intencity = { 1, 1, 1 };
         L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
     }
+
+    pathCache.lookUp(p, [&](const int triIndices[]) {
+        minimum_lbvh::Triangle tris[K];
+        TriangleAttrib attribs[K];
+        for (int k = 0; k < K; k++)
+        {
+            int indexOfTri = triIndices[k];
+            tris[k] = triangles[indexOfTri];
+            attribs[k] = triangleAttribs[indexOfTri];
+        }
+        float parameters[K * 2];
+        bool converged = solveConstraints<K>(parameters, p_light, p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
+
+        if (converged)
+        {
+            float throughput = contributableThroughput<K>(
+                parameters, p_light, p, tris, attribs, eDescriptor,
+                internals, triangles, *rootNode, eta);
+
+            if (0.0f < throughput)
+            {
+                float dAdwValue = dAdw(p_light, getVertex(0, tris, parameters) - p_light, p, tris, attribs, eDescriptor, K, eta);
+                L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+            }
+        }
+    });
 
     accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }

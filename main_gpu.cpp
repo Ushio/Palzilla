@@ -94,6 +94,9 @@ int main()
     std::vector<std::string> options;
     options.push_back("-I");
     options.push_back(GetDataPath("../"));
+    
+    //options.push_back("-G");
+
     Shader shader(GetDataPath("../main_gpu.cu").c_str(), "main_gpu", options);
 
     TypedBuffer<uint32_t> pixels(TYPED_BUFFER_DEVICE);
@@ -288,6 +291,7 @@ int main()
         printf(" occ %f\n", pathCache.occupancy());
 
         // debug view
+        if(0)
         {
             int nPoints = 0;
             oroMemcpyDtoH(&nPoints, debugPointCount.data(), sizeof(int));
@@ -299,6 +303,8 @@ int main()
             }
         }
 
+        sw.start();
+
         shader.launch("render",
             ShaderArgument()
             .value(accumulators.data())
@@ -309,11 +315,17 @@ int main()
             .value(trianglesDevice.data())
             .value(triangleAttribsDevice.data())
             .value(to(p_light))
+            .ptr(&pathCache)
+            .value(eDescriptor)
+            .value(eta)
             .value(iteration),
             div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
             16, 16, 1,
             0
         );
+
+        sw.stop();
+        printf("render %f\n", sw.getElapsedMs());
 
         shader.launch("pack",
             ShaderArgument()

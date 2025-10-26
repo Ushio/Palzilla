@@ -281,12 +281,8 @@ struct PathCache
     TypedBuffer<uint32_t> m_numberOfCached;
 };
 
-#if !defined(PK_KERNELCC)
-
-#include <math.h>
-
 // normal dir defines in-out of the medium
-inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
+PK_DEVICE inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     float c = dot(n, wi);
     if (c < 0.0f)
     {
@@ -308,7 +304,7 @@ inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
 }
 
 // normal dir defines in-out of the medium
-inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
+PK_DEVICE inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / eta_i */) {
     float nn = dot(n, n);
     float wiwi = dot(wi, wi);
     float C = dot(n, wi);
@@ -334,7 +330,7 @@ inline float fresnel_exact_norm_free(float3 wi, float3 n, float eta /* eta_t / e
 }
 
 // Building an Orthonormal Basis, Revisited
-void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
+PK_DEVICE void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
     const float sign = copysignf(1.0f, zaxis.z);
     const float a = -1.0f / (sign + zaxis.z);
     const float b = zaxis.x * zaxis.y * a;
@@ -343,12 +339,12 @@ void GetOrthonormalBasis(float3 zaxis, float3* xaxis, float3* yaxis) {
 }
 
 struct SolverEmptyCallback {
-    void operator()( int iter, bool converged ) const{}
+    PK_DEVICE void operator()( int iter, bool converged ) const{}
 };
 
 // parameters: output barycentric coordinates
 template <int K, class callback = SolverEmptyCallback >
-inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
+PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
 {
     const int nParameters = K * 2;
     for (int i = 0; i < nParameters; i++)
@@ -403,7 +399,7 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
 
                 if (dot(wi, n).v < 0.0f)
                 {
-                    std::swap(wi, wo);
+                    minimum_lbvh::swap(&wi, &wo);
                 }
 
 
@@ -460,7 +456,7 @@ inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end
     return false;
 }
 
-inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[])
+PK_DEVICE inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[])
 {
     minimum_lbvh::Triangle tri = tris[k];
     float3 e0 = tri.vs[1] - tri.vs[0];
@@ -469,7 +465,7 @@ inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[]
 }
 
 template <int K>
-inline float contributableThroughput(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, const minimum_lbvh::InternalNode* nodes, const minimum_lbvh::Triangle* sceneTriangles, minimum_lbvh::NodeIndex node, float eta )
+PK_DEVICE inline float contributableThroughput(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], EventDescriptor eDescriptor, const minimum_lbvh::InternalNode* nodes, const minimum_lbvh::Triangle* sceneTriangles, minimum_lbvh::NodeIndex node, float eta )
 {
     float3 vertices[K + 2];
     vertices[0] = p_beg;
@@ -488,7 +484,6 @@ inline float contributableThroughput(float parameters[K * 2], float3 p_beg, floa
             return 0.0f;
         }
 
-        minimum_lbvh::Triangle tri = tris[k];
         vertices[k + 1] = getVertex(k, tris, parameters);
 
         TriangleAttrib attrib = attribs[k];
@@ -553,7 +548,7 @@ inline float contributableThroughput(float parameters[K * 2], float3 p_beg, floa
     return throughput;
 }
 
-inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, EventDescriptor eDescriptor, int nEvent, float eta )
+PK_DEVICE inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, EventDescriptor eDescriptor, int nEvent, float eta )
 {
     rd = normalize(rd);
 
@@ -649,6 +644,8 @@ inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tr
     //float dAdwValue = sqrtf(fmaxf(dot(crs, crs), 1.0e-9f));
     return dAdwValue;
 }
+
+#if !defined(PK_KERNELCC)
 
 struct InternalNormalBound
 {
