@@ -205,6 +205,7 @@ struct PathCache
             {
                 m_hashsOfPath[i] = 0;
             }
+            m_numberOfCached[0] = 0;
         }
         else
         {
