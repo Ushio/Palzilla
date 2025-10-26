@@ -9,6 +9,8 @@
 #include "saka.h"
 #include "sen.h"
 #include "sobol.h"
+
+#define ENABLE_PATH_CUTS
 #include "pk.h"
 
 bool g_bruteforce = false;
@@ -844,8 +846,8 @@ int main() {
         //static glm::vec3 P0 = { 1, 0.5f, 0 };
         //static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
 
-        static glm::vec3 P0 = { -0.0187847f, -0.0271853f, 0.5f };
-        static glm::vec3 P2 = { 0.0443912f, 0.344693f, -0.5f };
+        static glm::vec3 P0 = { -0.580714, 0.861265, 1 };
+        static glm::vec3 P2 = { 0.203408, -0.1, -0.228277f };
         ManipulatePosition(camera, &P0, 0.3f);
         ManipulatePosition(camera, &P2, 0.3f);
 
@@ -946,7 +948,7 @@ int main() {
             K = 2
         };
         int index = 0;
-        float eta = 1.3f;
+        float eta = 1.6f;
         EventDescriptor eDescriptor;
         eDescriptor.set(0, Event::T);
         eDescriptor.set(1, Event::T);
@@ -1025,11 +1027,11 @@ int main() {
 
                 if (converged)
                 {
-                    bool contributable = contributablePath<K>(
+                    float throughput = contributableThroughput<K>(
                         parameters, to(P0), to(P2), tris, attribs, eDescriptor,
                         polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
 
-                    if (contributable)
+                    if (0.0f < throughput)
                     {
                         float3 vertices[K + 2];
                         vertices[0] = to(P0);
@@ -1478,7 +1480,7 @@ int main() {
         // Rendering
 #if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
-        static glm::vec3 p_light = { 0, 1, 1 };
+        static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
@@ -1488,7 +1490,7 @@ int main() {
 
         CameraRayGenerator rayGenerator(GetCurrentViewMatrix(), GetCurrentProjMatrix(), image.width(), image.height());
 
-        float eta = 1.3f;
+        float eta = 1.6f;
 
         Stopwatch sw;
 
@@ -1504,13 +1506,13 @@ int main() {
 
         // Photon Trace
         enum {
-            K = 3
+            K = 2
         };
         // EventDescriptor eDescriptor = { Event::R };
-        // EventDescriptor eDescriptor = { Event::T, Event::T };
+        EventDescriptor eDescriptor = { Event::T, Event::T };
         // EventDescriptor eDescriptor = { Event::T, Event::T, Event::T, Event::T };
         //EventDescriptor eDescriptor = { Event::T, Event::R, Event::R, Event::T };
-        EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
+        // EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
 
         for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
         {
@@ -1628,7 +1630,7 @@ int main() {
                         success = pathCache.store(p_final, triIndices, K);
                         if (success)
                         {
-                            DrawPoint(to(p_final), { 255, 0, 0 }, 2);
+                            // DrawPoint(to(p_final), { 255, 0, 0 }, 2);
                         }
                     }
 
@@ -1809,7 +1811,6 @@ int main() {
 
         //pr::PrimEnd();
 #endif
-
         PopGraphicState();
         EndCamera();
 
@@ -1820,7 +1821,7 @@ int main() {
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
-        ImGui::InputFloat("admissibleT", &admissibleT, 0.01f);
+        //ImGui::InputFloat("admissibleT", &admissibleT, 0.01f);
 
         //ImGui::InputInt("terminationCount", &terminationCount);
         //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);

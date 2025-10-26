@@ -234,7 +234,8 @@ int main()
 
         //pr::PrimEnd();
 
-        static glm::vec3 p_light = { 0, 1, 1 };
+        // static glm::vec3 p_light = { 0, 2, 1 };
+        static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
         glm::vec3 prev_p_light = p_light;
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
@@ -257,7 +258,7 @@ int main()
         RayGenerator rayGenerator;
         rayGenerator.lookat(to(camera.origin), to(camera.lookat), to(camera.up), camera.fovy, imageWidth, imageHeight);
 
-        static float eta = 1.3f;
+        static float eta = 1.6f;
         static float minThroughput = 0.05f;
 
         DeviceStopwatch sw(0);
@@ -359,11 +360,16 @@ int main()
             printf("%s %f\n", solveSpecular, sw.getElapsedMs());
         };
 
-        solveSpecular(1, { Event::R });
+        //solveSpecular(1, { Event::R });
         solveSpecular(2, { Event::T, Event::T });
-        solveSpecular(3, { Event::T,Event::R, Event::T });
-        solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
-        solveSpecular(4, { Event::T, Event::R, Event::R, Event::T });
+        //solveSpecular(3, { Event::T,Event::R, Event::T });
+        //solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
+        //solveSpecular(4, { Event::T, Event::R, Event::R, Event::T });
+
+        //solveSpecular(1, { Event::R });
+        //solveSpecular(2, { Event::R, Event::R });
+        //solveSpecular(3, { Event::R, Event::R, Event::R });
+        //solveSpecular(4, { Event::R, Event::R, Event::R, Event::R });
 
         shader.launch("pack",
             ShaderArgument()

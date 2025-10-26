@@ -483,11 +483,18 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
         }
 
         // extreme values can be rejected earlier
-        for (int i = 0; i < nParameters; i++)
+        if (4 /* it is an adhoc parameter but need some for thin triangles */ < iter)
         {
-            if (parameters[i] < -1.0f || 2.0f < parameters[i])
+            for (int k = 0; k < K; k++)
             {
-                return false;
+                float param_u = parameters[k * 2 + 0];
+                float param_v = parameters[k * 2 + 1];
+
+                // out side of triangle
+                if (param_u < -0.5f || param_v < -0.5f || 1.5f < param_u + param_v)
+                {
+                    return false;
+                }
             }
         }
 
