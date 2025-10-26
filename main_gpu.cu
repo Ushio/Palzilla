@@ -62,27 +62,101 @@ extern "C" __global__ void solvePrimary(float4* accumulators, FirstDiffuse* firs
     float3 ro, rd;
     rayGenerator.shoot(&ro, &rd, (float)(xi + jitter.x) / imageSize.x, (float)(yi + jitter.y) / imageSize.y);
 
-    Hit hit;
-    intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, invRd(rd));
-    if (hit.t == MINIMUM_LBVH_FLT_MAX)
+    bool hasDiffuseHit = false;
+    minimum_lbvh::Hit hit_last;
+    for (int d = 0; d < 16; d++)
+    {
+        minimum_lbvh::Hit hit;
+        minimum_lbvh::intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd));
+        if (hit.t == MINIMUM_LBVH_FLT_MAX)
+        {
+            hit_last = hit;
+            break;
+        }
+        TriangleAttrib attrib = triangleAttribs[hit.triangleIndex];
+        Material m = attrib.material;
+
+        float2 random;
+        sobol::shuffled_scrambled_sobol_2d(&random.x, &random.y, iteration, xi, yi, dimLevel++);
+
+        if (m == Material::Diffuse)
+        {
+            hasDiffuseHit = true;
+            hit_last = hit;
+            break;
+        }
+
+        float3 p_hit = ro + rd * hit.t;
+
+        float3 ns =
+            attrib.shadingNormals[0] +
+            (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
+            (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
+        float3 ng = dot(ns, hit.ng) < 0.0f ? -hit.ng : hit.ng; // aligned
+        float3 wi = -rd;
+
+        Event e;
+        if (m == Material::Mirror)
+        {
+            e = Event::R;
+        }
+        else if (m == Material::Dielectric)
+        {
+            float reflectance = fresnel_exact_norm_free(wi, ns, eta);
+            if (random.x < reflectance)
+            {
+                e = Event::R;
+            }
+            else
+            {
+                e = Event::T;
+            }
+        }
+
+        if (e == Event::R)
+        {
+            float3 wo = reflection(wi, ns);
+
+            if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
+            {
+                float3 ng_norm = normalize(ng);
+                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                rd = wo;
+                continue;
+            }
+        }
+        else
+        {
+            float3 wo;
+            if (refraction_norm_free(&wo, wi, ns, eta) == false)
+            {
+                break;
+            }
+
+            if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
+            {
+                float3 ng_norm = normalize(ng);
+                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                rd = wo;
+                continue;
+            }
+        }
+        break;
+    }
+
+    if ( hasDiffuseHit == false )
     {
         accumulators[pixel] += {0.0f, 0.0f, 0.0f, 1.0f};
+        firstDiffuses[pixel].R = { 0.0f, 0.0f, 0.0f };
         return;
     }
 
-    float3 p = ro + rd * hit.t;
-    float3 n = normalize(hit.ng);
+    float3 p = ro + rd * hit_last.t;
+    float3 n = normalize(hit_last.ng);
 
     if (0.0f < dot(n, rd))
     {
         n = -n;
-    }
-
-    if (triangleAttribs[hit.triangleIndex].material != Material::Diffuse)
-    {
-        // handle later
-        accumulators[pixel] += {0.0f, 1.0f, 1.0f, 1.0f};
-        return;
     }
 
     float3 toLight = p_light - p;
@@ -103,9 +177,14 @@ extern "C" __global__ void solvePrimary(float4* accumulators, FirstDiffuse* firs
         L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
     }
 
+    firstDiffuses[pixel].p = p;
+    firstDiffuses[pixel].ng = n;
+    firstDiffuses[pixel].R = reflectance;
+
+    accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }
 
-extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration)
+extern "C" __global__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -116,40 +195,14 @@ extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGener
     }
 
     int pixel = xi + yi * imageSize.x;
+    FirstDiffuse firstDiffuse = firstDiffuses[pixel];
 
-    int dimLevel = 0;
-    float2 jitter;
-    sobol::shuffled_scrambled_sobol_2d(&jitter.x, &jitter.y, iteration, xi, yi, dimLevel++);
-
-    float3 ro, rd;
-    rayGenerator.shoot(&ro, &rd, (float)(xi + jitter.x) / imageSize.x, (float)(yi + jitter.y) / imageSize.y);
-
-    Hit hit;
-    intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, invRd(rd));
-    if (hit.t == MINIMUM_LBVH_FLT_MAX)
-    {
-        accumulators[pixel] += {0.0f, 0.0f, 0.0f, 1.0f};
-        return;
-    }
-
-    float3 p = ro + rd * hit.t;
-    float3 n = normalize(hit.ng);
-
-    if (0.0f < dot(n, rd))
-    {
-        n = -n;
-    }
-
-    if (triangleAttribs[hit.triangleIndex].material != Material::Diffuse)
-    {
-        // handle later
-        accumulators[pixel] += {0.0f, 1.0f, 1.0f, 1.0f};
-        return;
-    }
+    float3 p = firstDiffuse.p;
+    float3 n = firstDiffuse.ng;
+    float3 R = firstDiffuse.R;
 
     float3 toLight = p_light - p;
     float d2 = dot(toLight, toLight);
-    float3 reflectance = { 0.75f, 0.75f, 0.75f };
 
     float3 L = {};
 
@@ -158,12 +211,6 @@ extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGener
         K = 2
     };
     float3 light_intencity = { 1, 1, 1 };
-
-    bool invisible = occluded(internals, triangles, *rootNode, p, n, p_light, { 0, 0, 0 });
-    if (!invisible)
-    {
-        L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
-    }
 
     pathCache.lookUp(p, [&](const int triIndices[]) {
         minimum_lbvh::Triangle tris[K];
@@ -186,12 +233,12 @@ extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGener
             if (0.0f < throughput)
             {
                 float dAdwValue = dAdw(p_light, getVertex(0, tris, parameters) - p_light, p, tris, attribs, eDescriptor, K, eta);
-                L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+                L += throughput * R * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
             }
         }
-    });
+        });
 
-    accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
+    accumulators[pixel] += {L.x, L.y, L.z, 0.0f};
 }
 
 template <int K>

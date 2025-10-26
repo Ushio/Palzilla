@@ -175,6 +175,8 @@ int main()
     triangleAttribsDevice << triangleAttribs;
     gpuBuilder.build(trianglesDevice.data(), trianglesDevice.size(), 0, onesweep, 0 /*stream*/);
 
+    TypedBuffer<FirstDiffuse> firstDiffuses(TYPED_BUFFER_DEVICE);
+
     const float spacial_step = 0.025f;
     PathCache pathCache(TYPED_BUFFER_DEVICE);
     pathCache.init(spacial_step);
@@ -244,11 +246,11 @@ int main()
         int imageWidth = GetScreenWidth();
         int imageHeight = GetScreenHeight();
 
-        pixels.allocate(imageWidth * imageHeight);
-
         if (accumulators.size() != imageWidth * imageHeight)
         {
+            pixels.allocate(imageWidth* imageHeight);
             accumulators.allocate(imageWidth * imageHeight);
+            firstDiffuses.allocate(imageWidth* imageHeight);
             clearAccumulation();
         }
 
@@ -305,11 +307,34 @@ int main()
 
         sw.start();
 
-        shader.launch("render",
+        shader.launch("solvePrimary",
             ShaderArgument()
             .value(accumulators.data())
+            .value(firstDiffuses.data())
             .value(int2{ imageWidth, imageHeight })
             .value(rayGenerator)
+            .value(gpuBuilder.m_rootNode)
+            .value(gpuBuilder.m_internals)
+            .value(trianglesDevice.data())
+            .value(triangleAttribsDevice.data())
+            .value(to(p_light))
+            .value(eta)
+            .value(iteration),
+            div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
+            16, 16, 1,
+            0
+        );
+
+        sw.stop();
+        printf("solvePrimary %f\n", sw.getElapsedMs());
+
+        sw.start();
+
+        shader.launch("solveSpecular",
+            ShaderArgument()
+            .value(accumulators.data())
+            .value(firstDiffuses.data())
+            .value(int2{ imageWidth, imageHeight })
             .value(gpuBuilder.m_rootNode)
             .value(gpuBuilder.m_internals)
             .value(trianglesDevice.data())
@@ -325,7 +350,8 @@ int main()
         );
 
         sw.stop();
-        printf("render %f\n", sw.getElapsedMs());
+        printf("solveSpecular %f\n", sw.getElapsedMs());
+
 
         shader.launch("pack",
             ShaderArgument()

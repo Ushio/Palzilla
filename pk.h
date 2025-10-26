@@ -33,7 +33,6 @@ struct TriangleAttrib
 struct FirstDiffuse
 {
     float3 p;
-    float3 ns;
     float3 ng;
     float3 R;
 };
