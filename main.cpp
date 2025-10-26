@@ -1547,7 +1547,6 @@ int main() {
                 float3 ro = to(p_light);
                 float3 rd = p - to(p_light);
 
-                bool inMedium = false;
                 bool admissiblePath = false;
                 int tris[K];
                 float3 p_final;
@@ -1602,21 +1601,10 @@ int main() {
                         float3 wi = -rd;
                         float3 wo;
 
-                        if (inMedium)
+                        if (refraction_norm_free(&wo, wi, ns, eta) == false)
                         {
-                            if (refraction_norm_free(&wo, wi, dot(ns, wi) < 0.0f ? -ns : ns, 1.0f / eta) == false)
-                            {
-                                break;
-                            }
+                            break;
                         }
-                        else
-                        {
-                            if (refraction_norm_free(&wo, wi, dot(ns, wi) < 0.0f ? -ns : ns, eta) == false)
-                            {
-                                break;
-                            }
-                        }
-                        inMedium = !inMedium;
 
                         if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
                         {

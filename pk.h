@@ -30,6 +30,14 @@ struct TriangleAttrib
     float3 shadingNormals[3];
 };
 
+struct FirstDiffuse
+{
+    float3 p;
+    float3 ns;
+    float3 ng;
+    float3 R;
+};
+
 PK_DEVICE inline bool occluded(
     const minimum_lbvh::InternalNode* nodes,
     const minimum_lbvh::Triangle* triangles,
@@ -99,13 +107,17 @@ PK_DEVICE inline float2 square2triangle(float2 square)
     }
     return square;
 }
+
+// normal dir defines in-out of the medium
 PK_DEVICE inline bool refraction_norm_free(float3* wo, float3 wi, float3 n, float eta /* = eta_t / eta_i */)
 {
     float NoN = dot(n, n);
     float WIoN = dot(wi, n);
     if (WIoN < 0.0f)
     {
-        return false;
+        WIoN = -WIoN;
+        n = -n;
+        eta = 1.0f / eta;
     }
 
     float WIoWI = dot(wi, wi);
