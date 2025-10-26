@@ -14,6 +14,8 @@
 #endif
 #endif
 
+#define SEN_FLT_MIN 1.175494351e-38F
+
 namespace sen
 {
     template <class T>
@@ -419,7 +421,7 @@ namespace sen
                 // A stopping criterion
                 // "4 One-sided Jacobi", Jameset al. el, Jacobi's method is more accurate than QR
                 // note that diag1 and diag2 can be zero in some bad-conditioned matrix but need to support them.
-                if( diag1 * diag2 <= FLT_MIN || non_diag * non_diag <= ( tol * tol ) * diag1 * diag2 )
+                if( diag1 * diag2 <= SEN_FLT_MIN || non_diag * non_diag <= ( tol * tol ) * diag1 * diag2 )
                 {
                     continue;
                 }

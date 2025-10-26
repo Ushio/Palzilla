@@ -359,8 +359,9 @@ int main()
 
         solveSpecular(1, { Event::R });
         solveSpecular(2, { Event::T, Event::T });
-
+        solveSpecular(3, { Event::T,Event::R, Event::T });
         solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
+        solveSpecular(4, { Event::T, Event::R, Event::R, Event::T });
 
         shader.launch("pack",
             ShaderArgument()

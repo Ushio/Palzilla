@@ -465,7 +465,17 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
             return true;
         }
 
+        // SVD based solver
+        // sen::Mat<K * 2, 1> dparams = sen::pinv(A) * b;
+
+        // Householder QR based solver
         sen::Mat<K * 2, 1> dparams = sen::solve_qr_overdetermined(A, b);
+
+        // Normal Equation and Cholesky Decomposition
+        //sen::Mat<K * 2, K * 3> AT = sen::transpose(A);
+        //sen::Mat<K * 2, K * 2> ATA = AT * A;
+        //sen::Mat<K * 2, 1> dparams = sen::solve_cholesky(ATA, AT * b);
+
         for (int i = 0; i < nParameters; i++)
         {
             parameters[i] = parameters[i] - dparams(i, 0);
