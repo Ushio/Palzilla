@@ -359,11 +359,11 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
         {
             success = pathCache->store(p_final, tris, K);
 
-            if (success)
-            {
-                int index = atomicAdd(debugPointCount, 1);
-                debugPoints[index] = p_final;
-            }
+            //if (success)
+            //{
+            //    int index = atomicAdd(debugPointCount, 1);
+            //    debugPoints[index] = p_final;
+            //}
         }
 
         if (__any(success))

@@ -176,7 +176,7 @@ struct PathCache
 {
     enum {
         MAX_PATH_LENGTH = 7,
-        CACHE_STORAGE_COUNT = 1u << 19
+        CACHE_STORAGE_COUNT = 1u << 22
     };
 
     struct TrianglePath

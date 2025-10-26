@@ -357,7 +357,10 @@ int main()
             printf("%s %f\n", solveSpecular, sw.getElapsedMs());
         };
 
+        solveSpecular(1, { Event::R });
         solveSpecular(2, { Event::T, Event::T });
+
+        solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
 
         shader.launch("pack",
             ShaderArgument()
