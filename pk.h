@@ -11,6 +11,7 @@
 #define PK_KERNELCC
 #define PK_DEVICE __device__
 #else
+#include <initializer_list>
 #define PK_DEVICE
 #endif
 
@@ -81,6 +82,17 @@ enum class Event
 struct EventDescriptor
 {
     PK_DEVICE EventDescriptor() : m_events(0) {}
+
+#if !defined(PK_KERNELCC)
+    EventDescriptor(std::initializer_list<Event> events) : m_events(0)
+    {
+        int index = 0;
+        for (Event e : events)
+        {
+            this->set(index++, e);
+        }
+    }
+#endif
 
     PK_DEVICE Event get(uint32_t index) const {
         bool setbit = m_events & (1u << index);
@@ -163,7 +175,7 @@ PK_DEVICE inline uint32_t spacial_hash(float3 p, float spacial_step) {
 struct PathCache
 {
     enum {
-        MAX_PATH_LENGTH = 4,
+        MAX_PATH_LENGTH = 7,
         CACHE_STORAGE_COUNT = 1u << 19
     };
 

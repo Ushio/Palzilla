@@ -237,10 +237,20 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
     accumulators[pixel] += {L.x, L.y, L.z, 0.0f};
 }
 
-extern "C" __global__ void __launch_bounds__(16 * 16) solveSpecular_K2(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration)
-{
-    solveSpecular<2>(accumulators, firstDiffuses, imageSize, rootNode, internals, triangles, triangleAttribs, p_light, &pathCache, eDescriptor, eta, iteration);
+#define DECL_SOLVE_SPECULAR_TRACE( k ) \
+extern "C" __global__ void __launch_bounds__(16 * 16) solveSpecular_K##k(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration) \
+{\
+    solveSpecular<k>(accumulators, firstDiffuses, imageSize, rootNode, internals, triangles, triangleAttribs, p_light, &pathCache, eDescriptor, eta, iteration);\
 }
+
+DECL_SOLVE_SPECULAR_TRACE(1);
+DECL_SOLVE_SPECULAR_TRACE(2);
+DECL_SOLVE_SPECULAR_TRACE(3);
+DECL_SOLVE_SPECULAR_TRACE(4);
+DECL_SOLVE_SPECULAR_TRACE(5);
+DECL_SOLVE_SPECULAR_TRACE(6);
+DECL_SOLVE_SPECULAR_TRACE(7);
+
 
 template <int K>
 __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache* pathCache, float3* debugPoints, int* debugPointCount)
@@ -371,11 +381,19 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
     }
 }
 
-extern "C" __global__ void __launch_bounds__(32) photonTrace_K2( const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float3 *debugPoints, int* debugPointCount)
-{
-    photonTrace<2>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, &pathCache, debugPoints, debugPointCount);
+#define DECL_PHOTON_TRACE( k ) \
+extern "C" __global__ void __launch_bounds__(32) photonTrace_K##k(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float3* debugPoints, int* debugPointCount)\
+{\
+    photonTrace<k>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, &pathCache, debugPoints, debugPointCount);\
 }
 
+DECL_PHOTON_TRACE(1)
+DECL_PHOTON_TRACE(2)
+DECL_PHOTON_TRACE(3)
+DECL_PHOTON_TRACE(4)
+DECL_PHOTON_TRACE(5)
+DECL_PHOTON_TRACE(6)
+DECL_PHOTON_TRACE(7)
 
 extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
 {

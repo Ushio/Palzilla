@@ -257,28 +257,9 @@ int main()
         RayGenerator rayGenerator;
         rayGenerator.lookat(to(camera.origin), to(camera.lookat), to(camera.up), camera.fovy, imageWidth, imageHeight);
 
-        oroMemsetD32(debugPointCount.data(), 0, 1);
-
-        EventDescriptor eDescriptor;
-        eDescriptor.set(0, Event::T);
-        eDescriptor.set(1, Event::T);
         static float eta = 1.3f;
 
         DeviceStopwatch sw(0);
-
-
-        // debug view
-        if(0)
-        {
-            int nPoints = 0;
-            oroMemcpyDtoH(&nPoints, debugPointCount.data(), sizeof(int));
-            std::vector<float3> points(nPoints);
-            oroMemcpyDtoH(points.data(), debugPoints.data(), sizeof(float3) * nPoints);
-            for (int i = 0; i < nPoints; i++)
-            {
-                DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
-            }
-        }
 
         sw.start();
 
@@ -303,58 +284,80 @@ int main()
         sw.stop();
         printf("solvePrimary %f\n", sw.getElapsedMs());
 
+        auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
+            oroMemsetD32(debugPointCount.data(), 0, 1);
 
-        sw.start();
+            sw.start();
 
-        pathCache.clear();
+            pathCache.clear();
 
-        shader.launch("photonTrace_K2",
-            ShaderArgument()
-            .value(gpuBuilder.m_rootNode)
-            .value(gpuBuilder.m_internals)
-            .value(trianglesDevice.data())
-            .value(triangleAttribsDevice.data())
-            .value(to(p_light))
-            .value(eDescriptor)
-            .value(eta)
-            .value(iteration)
-            .ptr(&pathCache)
-            .value(debugPoints.data())
-            .value(debugPointCount.data()),
-            gpuBuilder.m_nTriangles, 1, 1,
-            32, 1, 1,
-            0
-        );
+            char photonTrace[128];
+            char solveSpecular[128];
+            sprintf(photonTrace, "photonTrace_K%d", K);
+            sprintf(solveSpecular, "solveSpecular_K%d", K);
 
-        sw.stop();
-        printf("photonTrace_K2 %f\n", sw.getElapsedMs());
+            shader.launch(photonTrace,
+                ShaderArgument()
+                .value(gpuBuilder.m_rootNode)
+                .value(gpuBuilder.m_internals)
+                .value(trianglesDevice.data())
+                .value(triangleAttribsDevice.data())
+                .value(to(p_light))
+                .value(eDescriptor)
+                .value(eta)
+                .value(iteration)
+                .ptr(&pathCache)
+                .value(debugPoints.data())
+                .value(debugPointCount.data()),
+                gpuBuilder.m_nTriangles, 1, 1,
+                32, 1, 1,
+                0
+            );
 
-        printf(" occ %f\n", pathCache.occupancy());
+            sw.stop();
+            printf("%s %f\n", photonTrace, sw.getElapsedMs());
 
-        sw.start();
+            printf(" occ %f\n", pathCache.occupancy());
 
-        shader.launch("solveSpecular_K2",
-            ShaderArgument()
-            .value(accumulators.data())
-            .value(firstDiffuses.data())
-            .value(int2{ imageWidth, imageHeight })
-            .value(gpuBuilder.m_rootNode)
-            .value(gpuBuilder.m_internals)
-            .value(trianglesDevice.data())
-            .value(triangleAttribsDevice.data())
-            .value(to(p_light))
-            .ptr(&pathCache)
-            .value(eDescriptor)
-            .value(eta)
-            .value(iteration),
-            div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
-            16, 16, 1,
-            0
-        );
+            // debug view
+            if (0)
+            {
+                int nPoints = 0;
+                oroMemcpyDtoH(&nPoints, debugPointCount.data(), sizeof(int));
+                std::vector<float3> points(nPoints);
+                oroMemcpyDtoH(points.data(), debugPoints.data(), sizeof(float3) * nPoints);
+                for (int i = 0; i < nPoints; i++)
+                {
+                    DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
+                }
+            }
 
-        sw.stop();
-        printf("solveSpecular_K2 %f\n", sw.getElapsedMs());
+            sw.start();
 
+            shader.launch(solveSpecular,
+                ShaderArgument()
+                .value(accumulators.data())
+                .value(firstDiffuses.data())
+                .value(int2{ imageWidth, imageHeight })
+                .value(gpuBuilder.m_rootNode)
+                .value(gpuBuilder.m_internals)
+                .value(trianglesDevice.data())
+                .value(triangleAttribsDevice.data())
+                .value(to(p_light))
+                .ptr(&pathCache)
+                .value(eDescriptor)
+                .value(eta)
+                .value(iteration),
+                div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
+                16, 16, 1,
+                0
+            );
+
+            sw.stop();
+            printf("%s %f\n", solveSpecular, sw.getElapsedMs());
+        };
+
+        solveSpecular(2, { Event::T, Event::T });
 
         shader.launch("pack",
             ShaderArgument()
