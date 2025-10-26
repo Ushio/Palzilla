@@ -1492,23 +1492,12 @@ int main() {
 
         Stopwatch sw;
 
-        // pre pass
-        enum {
-            MAX_PATH_LENGTH = 4,
-            CACHE_STORAGE_COUNT = 1u << 18
-        };
+        const float spacial_step = 0.025f;
 
-        struct TrianglePath 
-        {
-            uint32_t hashOfP;
-            int tris[MAX_PATH_LENGTH];
-        };
-        std::vector<uint32_t> pathHashes(CACHE_STORAGE_COUNT);
-        std::vector<TrianglePath> pathes(CACHE_STORAGE_COUNT);
+        PathCache pathCache(TYPED_BUFFER_HOST);
+        pathCache.init(spacial_step);
 
         PCG rng;
-
-        const float spacial_step = 0.025f;
 
         static int terminationCount = 64;
 
@@ -1646,48 +1635,7 @@ int main() {
 
                 if (admissiblePath)
                 {
-                    uint32_t hashOfPath = 123;
-                    for (int d = 0; d < K; d++)
-                    {
-                        hashOfPath = minimum_lbvh::hashPCG(hashOfPath + tris[d]);
-                    }
-                    hashOfPath |= 1u;
-
-                    float3 indexf = (p_final / spacial_step);
-                    int x = floorf(indexf.x);
-                    int y = floorf(indexf.y);
-                    int z = floorf(indexf.z);
-                    int dx = indexf.x - x < 0.5f ? -1 : 1;
-                    int dy = indexf.y - y < 0.5f ? -1 : 1;
-                    int dz = indexf.z - z < 0.5f ? -1 : 1;
-                    for (int iz = 0; iz < 2; iz++)
-                    for (int iy = 0; iy < 2; iy++)
-                    for (int ix = 0; ix < 2; ix++)
-                    {
-                        uint32_t hashOfP = hash_of_iP(x + ix * dx, y + iy * dy, z + iz * dz);
-                        uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
-                        for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
-                        {
-                            uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
-                            if (pathHashes[index] == 0) // empty
-                            {
-                                pathHashes[index] = hashOfPath;
-                                pathes[index].hashOfP = hashOfP;
-                                for (int d = 0; d < K; d++)
-                                {
-                                    pathes[index].tris[d] = tris[d];
-                                }
-                                success = true;
-
-                                totalPath++;
-                                break;
-                            }
-                            else if (pathHashes[index] == hashOfPath)
-                            {
-                                break; // existing
-                            }
-                        }
-                    }
+                    success = pathCache.store(p_final, tris, K);
                 }
 
                 if (success)
@@ -1705,7 +1653,7 @@ int main() {
             }
         }
 
-        printf("occ %f\n", (float)totalPath / CACHE_STORAGE_COUNT);
+        // printf("occ %f\n", (float)totalPath / CACHE_STORAGE_COUNT);
 
         //for (int j = 0; j < image.height(); ++j){
         ParallelFor(image.height(), [&](int j) {
@@ -1758,97 +1706,6 @@ int main() {
                     L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
                 }
 
-#if 0
-                // reflection 1 level
-                //EventDescriptor eDescriptor;
-                //eDescriptor.set(0, Event::R);
-
-                //traverseAdmissibleNodes<1>(
-                //    eDescriptor,
-                //    1.0f,
-                //    p, to(p_light),
-                //    deltaPolygonSoup.builder.m_internals.data(),
-                //    deltaPolygonSoup.internalsNormalBound.data(),
-                //    deltaPolygonSoup.triangles.data(),
-                //    deltaPolygonSoup.triangleAttribs.data(),
-                //    deltaPolygonSoup.builder.m_rootNode, 
-                //    [&](AdmissibleTriangles<1> admissibleTriangles) {
-                //        minimum_lbvh::Triangle tri = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
-                //        TriangleAttrib attrib = deltaPolygonSoup.triangleAttribs[admissibleTriangles.indices[0]];
-
-                //        float parameters[2];
-                //        bool converged = solveConstraints<1>(parameters, p, to(p_light), &tri, &attrib, eta, eDescriptor, 32, 1.0e-10f);
-
-                //        if (converged )
-                //        {
-                //            bool throughput = contributableThroughput<1>(
-                //                parameters, p, to(p_light), &tri, &attrib, eDescriptor,
-                //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
-
-                //            if (0.0f < throughput)
-                //            {
-                //                minimum_lbvh::Triangle firstTri = tri;
-                //                float3 e0 = firstTri.vs[1] - firstTri.vs[0];
-                //                float3 e1 = firstTri.vs[2] - firstTri.vs[0];
-                //                float3 firstHit = tri.vs[0] + e0 * parameters[0] + e1 * parameters[1];
-                //                
-                //                //float dAdwValue = 1.0f;
-                //                float dAdwValue = dAdw(p, firstHit - p, to(p_light), &tri, &attrib, eDescriptor, 1, eta);
-                //                L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
-                //            }
-                //        }
-                //    });
-
-
-                int numberOfNewton = 0;
-                
-                // linear probing
-                uint32_t hashOfP = spacial_hash(p, spacial_step);
-                uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
-                for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
-                {
-                    uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
-                    if (pathHashes[index] == 0)
-                    {
-                        break; // no more cached
-                    }
-
-                    if (pathes[index].hashOfP != hashOfP)
-                    {
-                        continue;
-                    }
-
-                    numberOfNewton++;
-
-                    minimum_lbvh::Triangle tris[K];
-                    TriangleAttrib attribs[K];
-                    for (int k = 0; k < K; k++)
-                    {
-                        int indexOfTri = pathes[index].tris[k];
-                        tris[k] = polygonSoup.triangles[indexOfTri];
-                        attribs[k] = polygonSoup.triangleAttribs[indexOfTri];
-                    }
-
-                    float parameters[K * 2];
-                    bool converged = solveConstraints<1>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
-
-                    if (converged)
-                    {
-                        float throughput = contributableThroughput<1>(
-                            parameters, to(p_light), p, tris, attribs, eDescriptor,
-                            polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
-
-                        if (0.0f < throughput)
-                        {
-                            float3 firstHit = getVertex(0, tris, parameters);
-
-                            float dAdwValue = dAdw(to(p_light), firstHit - to(p_light), p, tris, attribs, eDescriptor, 1, eta);
-                            L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(firstHit - p), n), 0.0f);
-                        }
-                    }
-                }
-
-#else
                 int numberOfNewton = 0;
 
                 // refraction 2 levels
@@ -1898,28 +1755,12 @@ int main() {
 
                 //});
 
-                // linear probing
-                uint32_t hashOfP = spacial_hash(p, spacial_step);
-                uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
-                for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
-                {
-                    // CACHE_STORAGE_COUNT
-                    uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
-                    if (pathHashes[index] == 0)
-                    {
-                        break; // no more cached
-                    }
-                    if (pathes[index].hashOfP != hashOfP)
-                    {
-                        continue;
-                    }
-                    numberOfNewton++;
-
+                pathCache.lookUp(p, [&](int triIndices[]) {
                     minimum_lbvh::Triangle tris[K];
                     TriangleAttrib attribs[K];
                     for (int k = 0; k < K; k++)
                     {
-                        int indexOfTri = pathes[index].tris[k];
+                        int indexOfTri = triIndices[k];
                         tris[k] = polygonSoup.triangles[indexOfTri];
                         attribs[k] = polygonSoup.triangleAttribs[indexOfTri];
                     }
@@ -1939,8 +1780,7 @@ int main() {
                             L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
                         }
                     }
-                }
-#endif
+                });
 
                 // glm::vec3 color = viridis((float)numberOfNewton / 128);
 

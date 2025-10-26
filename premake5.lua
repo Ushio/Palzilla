@@ -12,6 +12,22 @@ externalproject "prlib"
     kind "StaticLib"
     language "C++"
 
+function enableOrochi()
+    -- Orochi
+    includedirs { "libs/orochi" }
+    files { "libs/orochi/Orochi/Orochi.h" }
+    files { "libs/orochi/Orochi/Orochi.cpp" }
+    includedirs { "libs/orochi/contrib/hipew/include" }
+    files { "libs/orochi/contrib/hipew/src/hipew.cpp" }
+    includedirs { "libs/orochi/contrib/cuew/include" }
+    files { "libs/orochi/contrib/cuew/src/cuew.cpp" }
+    links { "version" }
+    
+    -- Cuda
+    defines {"OROCHI_ENABLE_CUEW"}
+    includedirs {"$(CUDA_PATH)/include"}
+end
+
 project "main"
     kind "ConsoleApp"
     language "C++"
@@ -35,6 +51,8 @@ project "main"
     filter {"Release"}
         links { "prlib" }
     filter{}
+
+    enableOrochi()
 
     symbols "On"
 
@@ -72,19 +90,7 @@ project "main_gpu"
         links { "prlib" }
     filter{}
 
-    -- Orochi
-    includedirs { "libs/orochi" }
-    files { "libs/orochi/Orochi/Orochi.h" }
-    files { "libs/orochi/Orochi/Orochi.cpp" }
-    includedirs { "libs/orochi/contrib/hipew/include" }
-    files { "libs/orochi/contrib/hipew/src/hipew.cpp" }
-    includedirs { "libs/orochi/contrib/cuew/include" }
-    files { "libs/orochi/contrib/cuew/src/cuew.cpp" }
-    links { "version" }
-    
-    -- Cuda
-    defines {"OROCHI_ENABLE_CUEW"}
-    includedirs {"$(CUDA_PATH)/include"}
+    enableOrochi()
 
     symbols "On"
 
@@ -110,6 +116,8 @@ project "unittest"
     -- Src
     files { "unittest.cpp", "catch_amalgamated.cpp", "catch_amalgamated.hpp" }
     includedirs { "." }
+
+    enableOrochi()
 
     -- prlib
     -- setup command

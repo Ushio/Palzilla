@@ -3,6 +3,7 @@
 #include "minimum_lbvh.h"
 #include "sen.h"
 #include "saka.h"
+#include "typedbuffer.h"
 
 //#define ENABLE_PATH_CUTS 
 
@@ -121,7 +122,135 @@ PK_DEVICE inline float3 reflection(float3 wi, float3 n)
 {
     return n * dot(wi, n) * 2.0f / dot(n, n) - wi;
 }
+
+PK_DEVICE inline uint32_t hash_combine(uint32_t seed, uint32_t h)
+{
+    return h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+}
+PK_DEVICE inline uint32_t hash_of_iP(int x, int y, int z)
+{
+    uint32_t h = 12345;
+    h = hash_combine(h, x * 2654435761);
+    h = hash_combine(h, y * 805459861);
+    h = hash_combine(h, z * 3674653429);
+    return h | 1u;
+}
+PK_DEVICE inline uint32_t spacial_hash(float3 p, float spacial_step) {
+    float3 indexf = (p / spacial_step);
+    int x = floorf(indexf.x);
+    int y = floorf(indexf.y);
+    int z = floorf(indexf.z);
+    return hash_of_iP(x, y, z);
+}
 #if !defined(PK_KERNELCC)
+
+struct PathCache
+{
+    enum {
+        MAX_PATH_LENGTH = 4,
+        CACHE_STORAGE_COUNT = 1u << 18
+    };
+
+    struct TrianglePath
+    {
+        uint32_t hashOfP;
+        int tris[MAX_PATH_LENGTH];
+    };
+    PathCache(TYPED_BUFFER_TYPE type): m_hashsOfPath(type), m_pathes(type)
+    {
+    }
+    void init( float step )
+    {
+        m_spatial_step = step;
+        m_hashsOfPath.allocate(CACHE_STORAGE_COUNT);
+        m_pathes.allocate(CACHE_STORAGE_COUNT);
+        clear();
+    }
+    void clear()
+    {
+        if (m_hashsOfPath.isHost())
+        {
+            for (int i = 0; i < m_hashsOfPath.size(); i++)
+            {
+                m_hashsOfPath[i] = 0;
+            }
+        }
+    }
+
+    // return true when store was succeeded
+    bool store(float3 pos, int tris[], int K)
+    {
+        uint32_t hashOfPath = 123;
+        for (int d = 0; d < K; d++)
+        {
+            hashOfPath = minimum_lbvh::hashPCG(hashOfPath + tris[d]);
+        }
+        hashOfPath |= 1u;
+
+        bool success = false;
+
+        float3 indexf = pos / m_spatial_step;
+        int x = floorf(indexf.x);
+        int y = floorf(indexf.y);
+        int z = floorf(indexf.z);
+        int dx = indexf.x - x < 0.5f ? -1 : 1;
+        int dy = indexf.y - y < 0.5f ? -1 : 1;
+        int dz = indexf.z - z < 0.5f ? -1 : 1;
+        for (int iz = 0; iz < 2; iz++)
+        for (int iy = 0; iy < 2; iy++)
+        for (int ix = 0; ix < 2; ix++)
+        {
+            uint32_t hashOfP = hash_of_iP(x + ix * dx, y + iy * dy, z + iz * dz);
+            uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
+            for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
+            {
+                uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
+                if (m_hashsOfPath[index] == 0) // empty
+                {
+                    m_hashsOfPath[index] = hashOfPath;
+                    m_pathes[index].hashOfP = hashOfP;
+                    for (int d = 0; d < K; d++)
+                    {
+                        m_pathes[index].tris[d] = tris[d];
+                    }
+                    success = true;
+                    break;
+                }
+                else if (m_hashsOfPath[index] == hashOfPath)
+                {
+                    break; // existing
+                }
+            }
+        }
+
+        return success;
+    }
+
+    template <class F>
+    void lookUp(float3 p, F f)
+    {
+        uint32_t hashOfP = spacial_hash(p, m_spatial_step);
+        uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
+        for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
+        {
+            uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
+            if (m_hashsOfPath[index] == 0)
+            {
+                break; // no more cached
+            }
+            if (m_pathes[index].hashOfP != hashOfP)
+            {
+                continue;
+            }
+            f(m_pathes[index].tris);
+        }
+    }
+
+    float m_spatial_step = 1.0f;
+    TypedBuffer<uint32_t> m_hashsOfPath;
+    TypedBuffer<TrianglePath> m_pathes;
+};
+
 
 #include <math.h>
 #include "saka.h"
@@ -1011,25 +1140,5 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
 }
 
 #endif
-
-inline uint32_t hash_combine(uint32_t seed, uint32_t h)
-{
-    return h + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-}
-inline uint32_t hash_of_iP(int x, int y, int z)
-{
-    uint32_t h = 12345;
-    h = hash_combine(h, x * 2654435761);
-    h = hash_combine(h, y * 805459861);
-    h = hash_combine(h, z * 3674653429);
-    return h | 1u;
-}
-inline uint32_t spacial_hash(float3 p, float spacial_step) {
-    float3 indexf = (p / spacial_step);
-    int x = floorf(indexf.x);
-    int y = floorf(indexf.y);
-    int z = floorf(indexf.z);
-    return hash_of_iP(x, y, z);
-}
 
 #endif
