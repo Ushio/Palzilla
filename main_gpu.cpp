@@ -258,6 +258,7 @@ int main()
         rayGenerator.lookat(to(camera.origin), to(camera.lookat), to(camera.up), camera.fovy, imageWidth, imageHeight);
 
         static float eta = 1.3f;
+        static float minThroughput = 0.05f;
 
         DeviceStopwatch sw(0);
 
@@ -307,6 +308,7 @@ int main()
                 .value(eta)
                 .value(iteration)
                 .ptr(&pathCache)
+                .value(minThroughput)
                 .value(debugPoints.data())
                 .value(debugPointCount.data()),
                 gpuBuilder.m_nTriangles, 1, 1,
@@ -391,7 +393,11 @@ int main()
 
         ImGui::Text("spp : %d", iteration);
         ImGui::InputFloat("eta", &eta, 0.05f);
-
+        if (ImGui::InputFloat("minThroughput", &minThroughput, 0.01f))
+        {
+            clearAccumulation();
+        }
+        
         ImGui::End();
 
         EndImGui();

@@ -1500,14 +1500,17 @@ int main() {
         PCG rng;
 
         static int terminationCount = 64;
+        static float admissibleT = 0.05f;
 
-        // ray trace
+        // Photon Trace
         enum {
-            K = 4
+            K = 3
         };
         // EventDescriptor eDescriptor = { Event::R };
         // EventDescriptor eDescriptor = { Event::T, Event::T };
-        EventDescriptor eDescriptor = { Event::T, Event::T, Event::T, Event::T };
+        // EventDescriptor eDescriptor = { Event::T, Event::T, Event::T, Event::T };
+        //EventDescriptor eDescriptor = { Event::T, Event::R, Event::R, Event::T };
+        EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
 
         for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
         {
@@ -1540,8 +1543,9 @@ int main() {
                 float3 ro = to(p_light);
                 float3 rd = p - to(p_light);
 
+                float throughtput = 1.0f;
                 bool admissiblePath = false;
-                int tris[K];
+                int triIndices[K];
                 float3 p_final;
                 for (int d = 0; d < K + 1; d++)
                 {
@@ -1572,11 +1576,12 @@ int main() {
                         }
                         break;
                     }
+                    float3 wi = -rd;
+                    triIndices[d] = hit.triangleIndex;
+
                     if ( eDescriptor.get(d) == Event::R && (m == Material::Mirror || m == Material::Dielectric ))
                     {
-                        tris[d] = hit.triangleIndex;
-
-                        float3 wi = -rd;
+                        
                         float3 wo = reflection(wi, ns);
 
                         if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
@@ -1584,14 +1589,17 @@ int main() {
                             float3 ng_norm = normalize(ng);
                             ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                             rd = wo;
+
+                            if (m == Material::Dielectric)
+                            {
+                                throughtput *= fresnel_exact_norm_free(wi, ns, eta);
+                            }
+
                             continue;
                         }
                     }
                     if (eDescriptor.get(d) == Event::T && m == Material::Dielectric )
                     {
-                        tris[d] = hit.triangleIndex;
-
-                        float3 wi = -rd;
                         float3 wo;
 
                         if (refraction_norm_free(&wo, wi, ns, eta) == false)
@@ -1604,6 +1612,8 @@ int main() {
                             float3 ng_norm = normalize(ng);
                             ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                             rd = wo;
+
+                            throughtput *= 1.0f - fresnel_exact_norm_free(wi, ns, eta);
                             continue;
                         }
                     }
@@ -1613,11 +1623,15 @@ int main() {
 
                 if (admissiblePath)
                 {
-                    success = pathCache.store(p_final, tris, K);
-                    if (success)
+                    if (admissibleT < throughtput)
                     {
-                        //DrawPoint(to(p_final), { 255, 0, 0 }, 2);
+                        success = pathCache.store(p_final, triIndices, K);
+                        if (success)
+                        {
+                            DrawPoint(to(p_final), { 255, 0, 0 }, 2);
+                        }
                     }
+
                 }
 
                 if (success)
@@ -1806,8 +1820,9 @@ int main() {
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
+        ImGui::InputFloat("admissibleT", &admissibleT, 0.01f);
+
         //ImGui::InputInt("terminationCount", &terminationCount);
-        
         //ImGui::SliderFloat("param_a_init", &param_a_init, 0, 1);
         //ImGui::SliderFloat("param_b_init", &param_b_init, 0, 1);
         //if (ImGui::Button("restart"))

@@ -253,7 +253,7 @@ DECL_SOLVE_SPECULAR_TRACE(7);
 
 
 template <int K>
-__device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache* pathCache, float3* debugPoints, int* debugPointCount)
+__device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache* pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)
 {
     int iTri = blockIdx.x;
     if (attribs[iTri].material == Material::Diffuse)
@@ -287,8 +287,9 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
         float3 rd = p - p_light;
 
         bool admissiblePath = false;
-        int tris[K];
+        int triIndices[K];
         float3 p_final;
+        float throughtput = 1.0f;
         for (int d = 0; d < K + 1; d++)
         {
             minimum_lbvh::Hit hit;
@@ -317,11 +318,12 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
                 }
                 break;
             }
+
+            float3 wi = -rd;
+            triIndices[d] = hit.triangleIndex;
+
             if (eDescriptor.get(d) == Event::R && (m == Material::Mirror || m == Material::Dielectric))
             {
-                tris[d] = hit.triangleIndex;
-
-                float3 wi = -rd;
                 float3 wo = reflection(wi, ns);
 
                 if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
@@ -329,14 +331,16 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
                     float3 ng_norm = normalize(ng);
                     ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                     rd = wo;
+
+                    if (m == Material::Dielectric)
+                    {
+                        throughtput *= fresnel_exact_norm_free(wi, ns, eta);
+                    }
                     continue;
                 }
             }
             if (eDescriptor.get(d) == Event::T && m == Material::Dielectric)
             {
-                tris[d] = hit.triangleIndex;
-
-                float3 wi = -rd;
                 float3 wo;
 
                 if (refraction_norm_free(&wo, wi, ns, eta) == false)
@@ -349,15 +353,17 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
                     float3 ng_norm = normalize(ng);
                     ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                     rd = wo;
+
+                    throughtput *= 1.0f - fresnel_exact_norm_free(wi, ns, eta);
                     continue;
                 }
             }
             break;
         }
         bool success = false; 
-        if (admissiblePath)
+        if (admissiblePath && minThroughput < throughtput )
         {
-            success = pathCache->store(p_final, tris, K);
+            success = pathCache->store(p_final, triIndices, K);
 
             //if (success)
             //{
@@ -382,9 +388,9 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
 }
 
 #define DECL_PHOTON_TRACE( k ) \
-extern "C" __global__ void __launch_bounds__(32) photonTrace_K##k(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float3* debugPoints, int* debugPointCount)\
+extern "C" __global__ void __launch_bounds__(32) photonTrace_K##k(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)\
 {\
-    photonTrace<k>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, &pathCache, debugPoints, debugPointCount);\
+    photonTrace<k>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, &pathCache, minThroughput, debugPoints, debugPointCount);\
 }
 
 DECL_PHOTON_TRACE(1)
