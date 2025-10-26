@@ -164,11 +164,6 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float3 reflectance = { 0.75f, 0.75f, 0.75f };
 
     float3 L = {};
-
-    enum
-    {
-        K = 2
-    };
     float3 light_intencity = { 1, 1, 1 };
 
     bool invisible = occluded(internals, triangles, *rootNode, p, n, p_light, { 0, 0, 0 });
@@ -276,7 +271,7 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
     for (int j = 0; ; j++)
     {
         float2 params = {};
-        sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, 123, 456, 789);
+        sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, iteration, iTri, 789);
         params = square2triangle(params);
 
         float3 e0 = tri.vs[1] - tri.vs[0];
