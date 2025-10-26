@@ -253,7 +253,7 @@ int main()
         EventDescriptor eDescriptor;
         eDescriptor.set(0, Event::T);
         eDescriptor.set(1, Event::T);
-        float eta = 1.5f;
+        static float eta = 1.5f;
 
         DeviceStopwatch sw(0);
         sw.start();
@@ -333,6 +333,7 @@ int main()
         ImGui::Text("fps = %f", GetFrameRate());
 
         ImGui::Text("spp : %d", iteration);
+        ImGui::InputFloat("eta", &eta, 0.05f);
 
         ImGui::End();
 

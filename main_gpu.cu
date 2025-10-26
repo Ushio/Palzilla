@@ -134,6 +134,15 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
 
     minimum_lbvh::Triangle tri = triangles[iTri];
 
+    // Skip backface
+    float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
+    float3 ns = attribs[iTri].shadingNormals[0];
+    ng *= dot(ng, ns);
+    if (dot(ng, p_light - tri.vs[0]) < 0.0f)
+    {
+        return;
+    }
+
     float2 params = {};
     sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, threadIdx.x, 123, 456, 789);
     params = square2triangle(params);

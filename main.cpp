@@ -1510,7 +1510,7 @@ int main() {
 
         const float spacial_step = 0.025f;
 
-        static int terminationCount = 32;
+        static int terminationCount = 64;
 
         // ray trace
 #if 0
@@ -1535,6 +1535,15 @@ int main() {
             {
                 continue;
             }
+
+            float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
+            float3 ns = polygonSoup.triangleAttribs[iTri].shadingNormals[0];
+            ng *= dot(ng, ns);
+            if (dot(ng, to(p_light) - tri.vs[0]) < 0.0f )
+            {
+                continue;
+            }
+            //DrawPoint(to(tri.vs[0]), { 255, 0, 0 }, 2);
 
             int contiguousFails = 0;
             for (int j = 0; ; j++)
@@ -1581,7 +1590,7 @@ int main() {
                             admissiblePath = true;
                             cacheTo = hit.triangleIndex;
                             p_final = p_hit;
-                            // DrawPoint(to(p_hit), { 255, 0, 0 }, 2);
+                            //DrawPoint(to(p_hit), { 255, 0, 0 }, 2);
                         }
                         break;
                     }
