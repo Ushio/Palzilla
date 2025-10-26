@@ -14,8 +14,15 @@
 #define PK_DEVICE
 #endif
 
+#define MIN_VERTEX_DIST 1.0e-4f
 
-#define MIN_VERTEX_DIST 1.0e-3f
+PK_DEVICE inline float rayOffsetScale(float3 p)
+{
+    p = fabs(p);
+    float maxElem = fmaxf(fmaxf(fmaxf(p.x, p.y), p.z), 1.0f);
+    float flt_eps = 1.192092896e-07F;
+    return maxElem * flt_eps * 16.0f;
+}
 
 enum class Material : int
 {
@@ -55,9 +62,8 @@ PK_DEVICE inline bool occluded(
         to_n = -to_n;
     }
 
-    float eps = 1.0e-6f;
-    float3 from_safe = from + from_n * eps;
-    float3 to_safe = to + to_n * eps;
+    float3 from_safe = from + from_n * rayOffsetScale(from);
+    float3 to_safe = to + to_n * rayOffsetScale(to);
 
     float3 rd = to_safe - from_safe;
 

@@ -120,7 +120,7 @@ extern "C" __global__ void solvePrimary(float4* accumulators, FirstDiffuse* firs
             if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
             {
                 float3 ng_norm = normalize(ng);
-                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                 rd = wo;
                 continue;
             }
@@ -136,7 +136,7 @@ extern "C" __global__ void solvePrimary(float4* accumulators, FirstDiffuse* firs
             if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
             {
                 float3 ng_norm = normalize(ng);
-                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                 rd = wo;
                 continue;
             }
@@ -316,7 +316,7 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
                 if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
                 {
                     float3 ng_norm = normalize(ng);
-                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                     rd = wo;
                     continue;
                 }
@@ -336,7 +336,7 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
                 if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
                 {
                     float3 ng_norm = normalize(ng);
-                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                     rd = wo;
                     continue;
                 }
