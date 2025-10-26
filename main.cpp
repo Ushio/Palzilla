@@ -1502,20 +1502,13 @@ int main() {
         static int terminationCount = 64;
 
         // ray trace
-#if 0
         enum {
-            K = 1
+            K = 4
         };
-        EventDescriptor eDescriptor;
-        eDescriptor.set(0, Event::R);
-#else
-        enum {
-            K = 2
-        };
-        EventDescriptor eDescriptor;
-        eDescriptor.set(0, Event::T);
-        eDescriptor.set(1, Event::T);
-#endif
+        // EventDescriptor eDescriptor = { Event::R };
+        // EventDescriptor eDescriptor = { Event::T, Event::T };
+        EventDescriptor eDescriptor = { Event::T, Event::T, Event::T, Event::T };
+
         for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
         {
             minimum_lbvh::Triangle tri = polygonSoup.triangles[iTri];
@@ -1589,7 +1582,7 @@ int main() {
                         if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
                         {
                             float3 ng_norm = normalize(ng);
-                            ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                            ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                             rd = wo;
                             continue;
                         }
@@ -1609,7 +1602,7 @@ int main() {
                         if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
                         {
                             float3 ng_norm = normalize(ng);
-                            ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * 0.0001f;
+                            ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                             rd = wo;
                             continue;
                         }
@@ -1623,7 +1616,7 @@ int main() {
                     success = pathCache.store(p_final, tris, K);
                     if (success)
                     {
-                        DrawPoint(to(p_final), { 255, 0, 0 }, 2);
+                        //DrawPoint(to(p_final), { 255, 0, 0 }, 2);
                     }
                 }
 
