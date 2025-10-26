@@ -1516,7 +1516,6 @@ int main() {
         eDescriptor.set(0, Event::T);
         eDescriptor.set(1, Event::T);
 #endif
-        int totalPath = 0;
         for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
         {
             minimum_lbvh::Triangle tri = polygonSoup.triangles[iTri];
@@ -1551,7 +1550,6 @@ int main() {
                 bool inMedium = false;
                 bool admissiblePath = false;
                 int tris[K];
-                int cacheTo = -1;
                 float3 p_final;
                 for (int d = 0; d < K + 1; d++)
                 {
@@ -1577,7 +1575,6 @@ int main() {
                         {
                             // store 
                             admissiblePath = true;
-                            cacheTo = hit.triangleIndex;
                             p_final = p_hit;
                             //DrawPoint(to(p_hit), { 255, 0, 0 }, 2);
                         }

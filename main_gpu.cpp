@@ -184,8 +184,8 @@ int main()
     ITexture* texture = CreateTexture();
 
     Camera3D camera;
-    camera.origin = { 0.0f, 1.0f, 4.0f };
-    camera.lookat = { 0, 1.0f, 0 };
+    camera.origin = { 2, 2, -2 };
+    camera.lookat = { 0, 0, 0 };
 
     int iteration = 0;
 
@@ -257,10 +257,12 @@ int main()
         EventDescriptor eDescriptor;
         eDescriptor.set(0, Event::T);
         eDescriptor.set(1, Event::T);
-        static float eta = 1.5f;
+        static float eta = 1.3f;
 
         DeviceStopwatch sw(0);
         sw.start();
+
+        pathCache.clear();
 
         shader.launch("photonTrace_K2",
             ShaderArgument()
@@ -282,6 +284,8 @@ int main()
 
         sw.stop();
         printf("photonTrace_K2 %f\n", sw.getElapsedMs());
+
+        printf(" occ %f\n", pathCache.occupancy());
 
         // debug view
         {

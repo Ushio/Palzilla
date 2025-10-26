@@ -128,4 +128,11 @@ void operator<<(std::vector<T>& to, const TypedBuffer<T>& from)
     oroMemcpyKind kind = from.isHost() ? oroMemcpyHostToHost : oroMemcpyDeviceToHost;
     oroMemcpy(to.data(), (oroDeviceptr)from.data(), from.size() * sizeof(T), kind);
 }
+template <class T, size_t N>
+void operator<<(T (&to)[N], const TypedBuffer<T>& from)
+{
+    TYPED_BUFFER_ASSERT(N == from.size());
+    oroMemcpyKind kind = from.isHost() ? oroMemcpyHostToHost : oroMemcpyDeviceToHost;
+    oroMemcpy(to, (oroDeviceptr)from.data(), from.size() * sizeof(T), kind);
+}
 #endif

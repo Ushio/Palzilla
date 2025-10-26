@@ -177,6 +177,11 @@ struct PathCache
                 m_hashsOfPath[i] = 0;
             }
         }
+        else
+        {
+            oroMemsetD32(m_numberOfCached.data(), 0, 1);
+            oroMemsetD32(m_hashsOfPath.data(), 0, m_hashsOfPath.size());
+        }
     }
     uint32_t atomicCAS(uint32_t* address, uint32_t compare, uint32_t val)
     {
@@ -188,6 +193,12 @@ struct PathCache
     }
     float occupancy() const
     {
+        if (m_numberOfCached.isDevice())
+        {
+            uint32_t numberOfCached[1];
+            numberOfCached << m_numberOfCached;
+            return (float)numberOfCached[0] / CACHE_STORAGE_COUNT;
+        }
         return (float)m_numberOfCached[0] / CACHE_STORAGE_COUNT;
     }
 #endif
