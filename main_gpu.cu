@@ -43,7 +43,7 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
 }
 
 
-extern "C" __global__ void solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float eta, int iteration)
+extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float eta, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -184,7 +184,8 @@ extern "C" __global__ void solvePrimary(float4* accumulators, FirstDiffuse* firs
     accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }
 
-extern "C" __global__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration)
+template <int K>
+__device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache* pathCache, EventDescriptor eDescriptor, float eta, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -205,14 +206,9 @@ extern "C" __global__ void solveSpecular(float4* accumulators, const FirstDiffus
     float d2 = dot(toLight, toLight);
 
     float3 L = {};
-
-    enum
-    {
-        K = 2
-    };
     float3 light_intencity = { 1, 1, 1 };
 
-    pathCache.lookUp(p, [&](const int triIndices[]) {
+    pathCache->lookUp(p, [&](const int triIndices[]) {
         minimum_lbvh::Triangle tris[K];
         TriangleAttrib attribs[K];
         for (int k = 0; k < K; k++)
@@ -239,6 +235,11 @@ extern "C" __global__ void solveSpecular(float4* accumulators, const FirstDiffus
         });
 
     accumulators[pixel] += {L.x, L.y, L.z, 0.0f};
+}
+
+extern "C" __global__ void __launch_bounds__(16 * 16) solveSpecular_K2(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration)
+{
+    solveSpecular<2>(accumulators, firstDiffuses, imageSize, rootNode, internals, triangles, triangleAttribs, p_light, &pathCache, eDescriptor, eta, iteration);
 }
 
 template <int K>
@@ -370,7 +371,7 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
     }
 }
 
-extern "C" __global__ void photonTrace_K2( const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float3 *debugPoints, int* debugPointCount)
+extern "C" __global__ void __launch_bounds__(32) photonTrace_K2( const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float3 *debugPoints, int* debugPointCount)
 {
     photonTrace<2>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, &pathCache, debugPoints, debugPointCount);
 }

@@ -265,32 +265,7 @@ int main()
         static float eta = 1.3f;
 
         DeviceStopwatch sw(0);
-        sw.start();
 
-        pathCache.clear();
-
-        shader.launch("photonTrace_K2",
-            ShaderArgument()
-            .value(gpuBuilder.m_rootNode)
-            .value(gpuBuilder.m_internals)
-            .value(trianglesDevice.data())
-            .value(triangleAttribsDevice.data())
-            .value(to(p_light))
-            .value(eDescriptor)
-            .value(eta)
-            .value(iteration)
-            .ptr(&pathCache)
-            .value(debugPoints.data())
-            .value(debugPointCount.data()),
-            gpuBuilder.m_nTriangles, 1, 1,
-            32, 1, 1,
-            0
-        );
-
-        sw.stop();
-        printf("photonTrace_K2 %f\n", sw.getElapsedMs());
-
-        printf(" occ %f\n", pathCache.occupancy());
 
         // debug view
         if(0)
@@ -328,9 +303,37 @@ int main()
         sw.stop();
         printf("solvePrimary %f\n", sw.getElapsedMs());
 
+
         sw.start();
 
-        shader.launch("solveSpecular",
+        pathCache.clear();
+
+        shader.launch("photonTrace_K2",
+            ShaderArgument()
+            .value(gpuBuilder.m_rootNode)
+            .value(gpuBuilder.m_internals)
+            .value(trianglesDevice.data())
+            .value(triangleAttribsDevice.data())
+            .value(to(p_light))
+            .value(eDescriptor)
+            .value(eta)
+            .value(iteration)
+            .ptr(&pathCache)
+            .value(debugPoints.data())
+            .value(debugPointCount.data()),
+            gpuBuilder.m_nTriangles, 1, 1,
+            32, 1, 1,
+            0
+        );
+
+        sw.stop();
+        printf("photonTrace_K2 %f\n", sw.getElapsedMs());
+
+        printf(" occ %f\n", pathCache.occupancy());
+
+        sw.start();
+
+        shader.launch("solveSpecular_K2",
             ShaderArgument()
             .value(accumulators.data())
             .value(firstDiffuses.data())
@@ -350,7 +353,7 @@ int main()
         );
 
         sw.stop();
-        printf("solveSpecular %f\n", sw.getElapsedMs());
+        printf("solveSpecular_K2 %f\n", sw.getElapsedMs());
 
 
         shader.launch("pack",
