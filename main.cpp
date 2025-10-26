@@ -1636,6 +1636,10 @@ int main() {
                 if (admissiblePath)
                 {
                     success = pathCache.store(p_final, tris, K);
+                    if (success)
+                    {
+                        DrawPoint(to(p_final), { 255, 0, 0 }, 2);
+                    }
                 }
 
                 if (success)
@@ -1653,7 +1657,7 @@ int main() {
             }
         }
 
-        // printf("occ %f\n", (float)totalPath / CACHE_STORAGE_COUNT);
+        printf(" occ %f\n", pathCache.occupancy());
 
         //for (int j = 0; j < image.height(); ++j){
         ParallelFor(image.height(), [&](int j) {
@@ -1755,7 +1759,7 @@ int main() {
 
                 //});
 
-                pathCache.lookUp(p, [&](int triIndices[]) {
+                pathCache.lookUp(p, [&](const int triIndices[]) {
                     minimum_lbvh::Triangle tris[K];
                     TriangleAttrib attribs[K];
                     for (int k = 0; k < K; k++)

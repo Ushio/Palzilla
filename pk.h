@@ -142,13 +142,12 @@ PK_DEVICE inline uint32_t spacial_hash(float3 p, float spacial_step) {
     int z = floorf(indexf.z);
     return hash_of_iP(x, y, z);
 }
-#if !defined(PK_KERNELCC)
 
 struct PathCache
 {
     enum {
         MAX_PATH_LENGTH = 4,
-        CACHE_STORAGE_COUNT = 1u << 18
+        CACHE_STORAGE_COUNT = 1u << 19
     };
 
     struct TrianglePath
@@ -156,7 +155,9 @@ struct PathCache
         uint32_t hashOfP;
         int tris[MAX_PATH_LENGTH];
     };
-    PathCache(TYPED_BUFFER_TYPE type): m_hashsOfPath(type), m_pathes(type)
+
+#if !defined(PK_KERNELCC)
+    PathCache(TYPED_BUFFER_TYPE type): m_hashsOfPath(type), m_pathes(type), m_numberOfCached(type)
     {
     }
     void init( float step )
@@ -164,6 +165,7 @@ struct PathCache
         m_spatial_step = step;
         m_hashsOfPath.allocate(CACHE_STORAGE_COUNT);
         m_pathes.allocate(CACHE_STORAGE_COUNT);
+        m_numberOfCached.allocate(1);
         clear();
     }
     void clear()
@@ -176,9 +178,22 @@ struct PathCache
             }
         }
     }
+    uint32_t atomicCAS(uint32_t* address, uint32_t compare, uint32_t val)
+    {
+        return InterlockedCompareExchange((volatile LONG *)address, (LONG)val, (LONG)compare);
+    }
+    void atomicInc(uint32_t* address, uint32_t)
+    {
+        InterlockedIncrement((volatile LONG*)address);
+    }
+    float occupancy() const
+    {
+        return (float)m_numberOfCached[0] / CACHE_STORAGE_COUNT;
+    }
+#endif
 
     // return true when store was succeeded
-    bool store(float3 pos, int tris[], int K)
+    PK_DEVICE bool store(float3 pos, int tris[], int K)
     {
         uint32_t hashOfPath = 123;
         for (int d = 0; d < K; d++)
@@ -205,7 +220,9 @@ struct PathCache
             for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
             {
                 uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
-                if (m_hashsOfPath[index] == 0) // empty
+                uint32_t old = atomicCAS(&m_hashsOfPath[index], 0, hashOfPath);
+
+                if (old == 0) // inserted
                 {
                     m_hashsOfPath[index] = hashOfPath;
                     m_pathes[index].hashOfP = hashOfP;
@@ -214,11 +231,12 @@ struct PathCache
                         m_pathes[index].tris[d] = tris[d];
                     }
                     success = true;
+                    atomicInc(&m_numberOfCached[0], 0xFFFFFFFF);
                     break;
                 }
-                else if (m_hashsOfPath[index] == hashOfPath)
+                else if (old == hashOfPath) // existing
                 {
-                    break; // existing
+                    break;
                 }
             }
         }
@@ -227,7 +245,7 @@ struct PathCache
     }
 
     template <class F>
-    void lookUp(float3 p, F f)
+    PK_DEVICE void lookUp(float3 p, F f) const
     {
         uint32_t hashOfP = spacial_hash(p, m_spatial_step);
         uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
@@ -249,13 +267,12 @@ struct PathCache
     float m_spatial_step = 1.0f;
     TypedBuffer<uint32_t> m_hashsOfPath;
     TypedBuffer<TrianglePath> m_pathes;
+    TypedBuffer<uint32_t> m_numberOfCached;
 };
 
+#if !defined(PK_KERNELCC)
 
 #include <math.h>
-#include "saka.h"
-#include "sen.h"
-
 
 // normal dir defines in-out of the medium
 inline float fresnel_exact(float3 wi, float3 n, float eta /* eta_t / eta_i */) {

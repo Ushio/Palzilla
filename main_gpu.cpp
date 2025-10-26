@@ -172,6 +172,10 @@ int main()
     triangleAttribsDevice << triangleAttribs;
     gpuBuilder.build(trianglesDevice.data(), trianglesDevice.size(), 0, onesweep, 0 /*stream*/);
 
+    const float spacial_step = 0.025f;
+    PathCache pathCache(TYPED_BUFFER_DEVICE);
+    pathCache.init(spacial_step);
+
     TypedBuffer<float3> debugPoints(TYPED_BUFFER_DEVICE);
     TypedBuffer<int> debugPointCount(TYPED_BUFFER_DEVICE);
     debugPoints.allocate(1 << 22);
@@ -268,6 +272,7 @@ int main()
             .value(eDescriptor)
             .value(eta)
             .value(iteration)
+            .ptr(&pathCache)
             .value(debugPoints.data())
             .value(debugPointCount.data()),
             gpuBuilder.m_nTriangles, 1, 1,

@@ -124,7 +124,7 @@ extern "C" __global__ void render(float4* accumulators, int2 imageSize, RayGener
 }
 
 template <int K>
-__device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, float3* debugPoints, int* debugPointCount)
+__device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache* pathCache, float3* debugPoints, int* debugPointCount)
 {
     int iTri = blockIdx.x;
     if (attribs[iTri].material == Material::Diffuse)
@@ -239,15 +239,18 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
 
     if (admissiblePath)
     {
+        pathCache->store(p_final, tris, K);
+
         int index = atomicAdd(debugPointCount, 1);
         debugPoints[index] = p_final;
     }
 }
 
-extern "C" __global__ void photonTrace_K2( const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, float3 *debugPoints, int* debugPointCount)
+extern "C" __global__ void photonTrace_K2( const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float3 *debugPoints, int* debugPointCount)
 {
-    photonTrace<2>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, debugPoints, debugPointCount);
+    photonTrace<2>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, &pathCache, debugPoints, debugPointCount);
 }
+
 
 extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
 {
