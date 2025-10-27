@@ -847,7 +847,7 @@ int main() {
         //static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
 
         static glm::vec3 P0 = { -0.580714, 0.861265, 1 };
-        static glm::vec3 P2 = { 0.203408, -0.1, -0.228277f };
+        static glm::vec3 P2 = { 0.0109809, -0.1, -0.239754f };
         ManipulatePosition(camera, &P0, 0.3f);
         ManipulatePosition(camera, &P2, 0.3f);
 
@@ -945,13 +945,12 @@ int main() {
         int numberOfNewton = 0;
 
         enum {
-            K = 2
+            K = 3
         };
         int index = 0;
         float eta = 1.6f;
-        EventDescriptor eDescriptor;
-        eDescriptor.set(0, Event::T);
-        eDescriptor.set(1, Event::T);
+        EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
+
         traverseAdmissibleNodes<K>(
             eDescriptor,
             eta,
@@ -961,7 +960,7 @@ int main() {
             deltaPolygonSoup.triangles.data(),
             deltaPolygonSoup.triangleAttribs.data(),
             deltaPolygonSoup.builder.m_rootNode,
-            [&](AdmissibleTriangles<2> admissibleTriangles) {
+            [&](AdmissibleTriangles<K> admissibleTriangles) {
                 
 
                 //bool debug = admissibleTriangles.indices[0] == 25 && admissibleTriangles.indices[1] == 91;
@@ -1022,7 +1021,7 @@ int main() {
                     attribs[k] = deltaPolygonSoup.triangleAttribs[index];
                 }
 
-                float parameters[4];
+                float parameters[K * 2];
                 bool converged = solveConstraints<K>(parameters, to(P0), to(P2), tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
                 if (converged)
@@ -1506,13 +1505,13 @@ int main() {
 
         // Photon Trace
         enum {
-            K = 2
+            K = 3
         };
         // EventDescriptor eDescriptor = { Event::R };
-        EventDescriptor eDescriptor = { Event::T, Event::T };
+        //EventDescriptor eDescriptor = { Event::T, Event::T };
         // EventDescriptor eDescriptor = { Event::T, Event::T, Event::T, Event::T };
         //EventDescriptor eDescriptor = { Event::T, Event::R, Event::R, Event::T };
-        // EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
+        EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
 
         for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
         {
