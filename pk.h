@@ -765,8 +765,8 @@ PK_DEVICE inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Tr
         GetOrthonormalBasis(rd, &T0, &T1);
 
         saka::dval3 rd_j = saka::make_dval3(rd)
-            + saka::make_dval3(rd + T0) * differentials[0]
-            + saka::make_dval3(rd + T1) * differentials[1];
+            + saka::make_dval3(T0) * differentials[0]
+            + saka::make_dval3(T1) * differentials[1];
 
         bool inMedium = false;
 
