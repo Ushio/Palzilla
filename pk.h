@@ -503,6 +503,154 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
     return false;
 }
 
+PK_DEVICE inline saka::dval3 intersect_p_ray_plane(saka::dval3 ro, saka::dval3 rd, saka::dval3 ng, saka::dval3 v0)
+{
+    auto t = dot(v0 - ro, ng) / dot(ng, rd);
+    return ro + rd * t;
+};
+
+template <int K, class callback = SolverEmptyCallback >
+PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
+{
+    const int nParameters = K * 2;
+    for (int i = 0; i < nParameters; i++)
+    {
+        parameters[i] = 1.0f / 3.0f;
+    }
+
+    for (int iter = 0; iter < maxIterations; iter++)
+    {
+        sen::Mat<3, 2> A;
+        sen::Mat<3, 1> b;
+
+        float cost = 0.0f;
+
+        for (int i = 0; i < 2; i++)
+        {
+            saka::dval parameters_optimizable[2];
+            for (int j = 0; j < 2; j++)
+            {
+                parameters_optimizable[j] = parameters[j];
+            }
+            parameters_optimizable[i].requires_grad();
+
+            saka::dval3 ro = saka::make_dval3(p_beg);
+            saka::dval3 to =
+                saka::make_dval3(tris[0].vs[0]) +
+                saka::make_dval3(tris[0].vs[1] - tris[0].vs[0]) * parameters_optimizable[0] +
+                saka::make_dval3(tris[0].vs[2] - tris[0].vs[0]) * parameters_optimizable[1];
+            saka::dval3 rd = to - ro;
+
+            bool inMedium = false;
+            for (int j = 0; j < K; j++)
+            {
+                minimum_lbvh::Triangle tri = tris[j];
+                TriangleAttrib attrib = attribs[j];
+
+                float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
+
+                saka::dval3 p = intersect_p_ray_plane(ro, rd, saka::make_dval3(ng), saka::make_dval3(tri.vs[0]));
+
+                pr::DrawLine(
+                    { ro.x.v, ro.y.v , ro.z.v },
+                    { p.x.v, p.y.v , p.z.v },
+                    { 255, 255, 0 }
+                );
+
+                saka::dval v = dot(p - saka::make_dval3(tri.vs[1]), saka::make_dval3(cross(ng, tri.vs[1] - tri.vs[0])));
+                saka::dval w = dot(p - saka::make_dval3(tri.vs[2]), saka::make_dval3(cross(ng, tri.vs[2] - tri.vs[1])));
+                saka::dval u = dot(p - saka::make_dval3(tri.vs[0]), saka::make_dval3(cross(ng, tri.vs[0] - tri.vs[2])));
+
+                saka::dval area = u + v + w;
+                u = u / area;
+                v = v / area;
+                w = w / area;
+
+                if (j != 0)
+                {
+                    parameters[j * 2] = u.v;
+                    parameters[j * 2 + 1] = v.v;
+                }
+
+                saka::dval3 n =
+                    saka::make_dval3(attrib.shadingNormals[0]) * w +
+                    saka::make_dval3(attrib.shadingNormals[1]) * u +
+                    saka::make_dval3(attrib.shadingNormals[2]) * v;
+
+                saka::dval3 wi = -rd;
+
+                saka::dval3 wo;
+                if (eDescriptor.get(j) == Event::T)
+                {
+                    if (inMedium)
+                    {
+                        wo = saka::refraction_norm_free(wi, -n, 1.0f / eta);
+                        if (wo.x.v == 0.0f && wo.y.v == 0.0f && wo.z.v == 0.0f)
+                        {
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        wo = saka::refraction_norm_free(wi, n, eta);
+                    }
+                    inMedium = !inMedium;
+                }
+                else
+                {
+                    wo = saka::reflection(wi, n);
+                }
+
+                ro = p;
+                rd = wo;
+
+                if (j + 1 == K)
+                {
+                    saka::dval3 c = saka::cross(wo, saka::make_dval3(p_end) - p /* the last vertex */);
+
+                    A(0, i) = c.x.g;
+                    A(1, i) = c.y.g;
+                    A(2, i) = c.z.g;
+
+                    b(0, 0) = c.x.v;
+                    b(1, 0) = c.y.v;
+                    b(2, 0) = c.z.v;
+
+                    if (i == 0)
+                    {
+                        cost += dot(c, c).v;
+                    }
+                }
+            }
+        }
+
+        if (cost < costTolerance)
+        {
+            end_of_iter(iter, true);
+            return true;
+        }
+
+        // SVD based solver
+        // sen::Mat<K * 2, 1> dparams = sen::pinv(A) * b;
+
+        // Householder QR based solver
+        sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
+
+        // Normal Equation and Cholesky Decomposition
+        //sen::Mat<K * 2, K * 3> AT = sen::transpose(A);
+        //sen::Mat<K * 2, K * 2> ATA = AT * A;
+        //sen::Mat<K * 2, 1> dparams = sen::solve_cholesky(ATA, AT * b);
+
+        for (int i = 0; i < 2; i++)
+        {
+            parameters[i] = parameters[i] - dparams(i, 0);
+        }
+
+        end_of_iter(iter, iter == maxIterations - 1);
+    }
+    return false;
+}
+
 PK_DEVICE inline float3 getVertex(int k, minimum_lbvh::Triangle tris[], float parameters[])
 {
     minimum_lbvh::Triangle tri = tris[k];
