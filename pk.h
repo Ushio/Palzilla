@@ -512,11 +512,22 @@ PK_DEVICE inline saka::dval3 intersect_p_ray_plane(saka::dval3 ro, saka::dval3 r
 template <int K, class callback = SolverEmptyCallback >
 PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
 {
+    //if (g_bruteforce)
+    //{
+    //    return solveConstraints<K>(parameters, p_beg, p_end, tris, attribs, eta, eDescriptor, maxIterations, costTolerance, end_of_iter);
+    //}
     const int nParameters = K * 2;
-    for (int i = 0; i < nParameters; i++)
-    {
-        parameters[i] = 1.0f / 3.0f;
-    }
+    //for (int i = 0; i < nParameters; i++)
+    //{
+    //    parameters[i] = 1.0f / 3.0f;
+    //}
+    float d_params[2] = {};
+    float3 firstCenter = tris[0].vs[0] +
+       (tris[0].vs[1] - tris[0].vs[0]) * parameters[0] +
+       (tris[0].vs[2] - tris[0].vs[0]) * parameters[1];
+    float3 rd_base = normalize(firstCenter - p_beg);
+    float3 T0, T1;
+    GetOrthonormalBasis(rd_base, &T0, &T1);
 
     for (int iter = 0; iter < maxIterations; iter++)
     {
@@ -527,19 +538,13 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
 
         for (int i = 0; i < 2; i++)
         {
-            saka::dval parameters_optimizable[2];
-            for (int j = 0; j < 2; j++)
-            {
-                parameters_optimizable[j] = parameters[j];
-            }
-            parameters_optimizable[i].requires_grad();
+            saka::dval differentials[2] = { d_params[0], d_params[1] };
+            differentials[i].requires_grad();
 
             saka::dval3 ro = saka::make_dval3(p_beg);
-            saka::dval3 to =
-                saka::make_dval3(tris[0].vs[0]) +
-                saka::make_dval3(tris[0].vs[1] - tris[0].vs[0]) * parameters_optimizable[0] +
-                saka::make_dval3(tris[0].vs[2] - tris[0].vs[0]) * parameters_optimizable[1];
-            saka::dval3 rd = to - ro;
+            saka::dval3 rd = saka::make_dval3(rd_base)
+                + saka::make_dval3(T0) * differentials[0]
+                + saka::make_dval3(T1) * differentials[1];
 
             bool inMedium = false;
             for (int j = 0; j < K; j++)
@@ -551,11 +556,12 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
 
                 saka::dval3 p = intersect_p_ray_plane(ro, rd, saka::make_dval3(ng), saka::make_dval3(tri.vs[0]));
 
-                pr::DrawLine(
-                    { ro.x.v, ro.y.v , ro.z.v },
-                    { p.x.v, p.y.v , p.z.v },
-                    { 255, 255, 0 }
-                );
+                //pr::DrawLine(
+                //    { ro.x.v, ro.y.v , ro.z.v },
+                //    { p.x.v, p.y.v , p.z.v },
+                //    { 255, 255, 0 },
+                //    3
+                //);
 
                 saka::dval v = dot(p - saka::make_dval3(tri.vs[1]), saka::make_dval3(cross(ng, tri.vs[1] - tri.vs[0])));
                 saka::dval w = dot(p - saka::make_dval3(tri.vs[2]), saka::make_dval3(cross(ng, tri.vs[2] - tri.vs[1])));
@@ -566,11 +572,8 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
                 v = v / area;
                 w = w / area;
 
-                if (j != 0)
-                {
-                    parameters[j * 2] = u.v;
-                    parameters[j * 2 + 1] = v.v;
-                }
+                parameters[j * 2] = u.v;
+                parameters[j * 2 + 1] = v.v;
 
                 saka::dval3 n =
                     saka::make_dval3(attrib.shadingNormals[0]) * w +
@@ -641,9 +644,13 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
         //sen::Mat<K * 2, K * 2> ATA = AT * A;
         //sen::Mat<K * 2, 1> dparams = sen::solve_cholesky(ATA, AT * b);
 
+        //for (int i = 0; i < 2; i++)
+        //{
+        //    parameters[i] = parameters[i] - dparams(i, 0);
+        //}
         for (int i = 0; i < 2; i++)
         {
-            parameters[i] = parameters[i] - dparams(i, 0);
+            d_params[i] = d_params[i] - dparams(i, 0);
         }
 
         end_of_iter(iter, iter == maxIterations - 1);
