@@ -62,7 +62,6 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float3 ro, rd;
     rayGenerator.shoot(&ro, &rd, (float)(xi + jitter.x) / imageSize.x, (float)(yi + jitter.y) / imageSize.y);
 
-    float compression = 1.0f;
     bool hasDiffuseHit = false;
     minimum_lbvh::Hit hit_last;
     for (int d = 0; d < 16; d++)
@@ -141,7 +140,6 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
                 rd = wo;
                 
                 float c = eta * eta;
-                compression *= 0.0f < dot(wi, ns) ? c : 1.0f / c;
                 continue;
             }
         }
@@ -183,7 +181,6 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     firstDiffuses[pixel].p = p;
     firstDiffuses[pixel].ng = n;
     firstDiffuses[pixel].R = reflectance;
-    firstDiffuses[pixel].compression = compression;
 
     accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }
@@ -205,7 +202,6 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
     float3 p = firstDiffuse.p;
     float3 n = firstDiffuse.ng;
     float3 R = firstDiffuse.R;
-    float compression = firstDiffuse.compression;
 
     float3 toLight = p_light - p;
     float d2 = dot(toLight, toLight);
@@ -238,7 +234,7 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
             if (0.0f < throughput)
             {
                 float dAdwValue = dAdw(p_light, getVertex(0, tris, parameters) - p_light, p, tris, attribs, eDescriptor, K, eta);
-                L += throughput * compression * R * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+                L += throughput * R * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
             }
         }
         });
