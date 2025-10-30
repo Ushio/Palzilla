@@ -15,7 +15,7 @@
 #define PK_DEVICE
 #endif
 
-#define MIN_VERTEX_DIST 1.0e-4f
+#define MIN_VERTEX_DIST 1.0e-5f
 
 PK_DEVICE inline float rayOffsetScale(float3 p)
 {
