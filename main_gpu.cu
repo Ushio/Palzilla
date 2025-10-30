@@ -43,7 +43,7 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
 }
 
 
-extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float eta /* = eta_t / eta_i */, int iteration)
+extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float eta /* = eta_t / eta_i */, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -165,15 +165,19 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
 
     float3 toLight = p_light - p;
     float d2 = dot(toLight, toLight);
-    float3 reflectance = { 0.75f, 0.75f, 0.75f };
+
+    float scale = 10.0f;
+    int x = floor(p.x * scale);
+    int z = floor(p.z * scale);
+    float chess = (x + z) % 2;
+    float3 reflectance = lerp(float3{ 0.5f, 0.5f, 0.5f }, float3{ 0.75f, 0.75f, 0.75f }, chess);
 
     float3 L = {};
-    float3 light_intencity = { 1, 1, 1 };
 
     bool invisible = occluded(internals, triangles, *rootNode, p, n, p_light, { 0, 0, 0 });
     if (!invisible)
     {
-        L += reflectance * light_intencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
+        L += reflectance * lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
     }
 
     firstDiffuses[pixel].p = p;

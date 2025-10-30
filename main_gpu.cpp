@@ -286,6 +286,7 @@ int main()
             .value(trianglesDevice.data())
             .value(triangleAttribsDevice.data())
             .value(to(p_light))
+            .value(lightIntencity)
             .value(eta)
             .value(iteration),
             div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
