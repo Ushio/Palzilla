@@ -192,6 +192,8 @@ int main()
     camera.origin = { 2, 2, -2 };
     camera.lookat = { 0, 0, 0 };
 
+    float lightIntencity = 1.0f;
+
     int iteration = 0;
 
     auto clearAccumulation = [&]() {
@@ -355,6 +357,7 @@ int main()
                 .value(trianglesDevice.data())
                 .value(triangleAttribsDevice.data())
                 .value(to(p_light))
+                .value(lightIntencity)
                 .ptr(&pathCache)
                 .value(eDescriptor)
                 .value(eta)
@@ -414,6 +417,10 @@ int main()
             clearAccumulation();
         }
         if (ImGui::InputFloat("minThroughput", &minThroughput, 0.01f))
+        {
+            clearAccumulation();
+        }
+        if (ImGui::SliderFloat("lightIntencity", &lightIntencity, 0, 2))
         {
             clearAccumulation();
         }

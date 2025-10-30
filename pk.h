@@ -43,6 +43,7 @@ struct FirstDiffuse
     float3 p;
     float3 ng;
     float3 R;
+    float compression;
 };
 
 PK_DEVICE inline bool occluded(
