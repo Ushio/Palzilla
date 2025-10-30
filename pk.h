@@ -183,6 +183,7 @@ struct PathCache
     {
         uint32_t hashOfP;
         int tris[MAX_PATH_LENGTH];
+        float parameters[MAX_PATH_LENGTH * 2];
     };
 
 #if !defined(PK_KERNELCC)
@@ -234,7 +235,7 @@ struct PathCache
 #endif
 
     // return true when store was succeeded
-    PK_DEVICE bool store(float3 pos, int tris[], int K)
+    PK_DEVICE bool store(float3 pos, int tris[], float* parameters, int K)
     {
         uint32_t hashOfPath = 123;
         for (int d = 0; d < K; d++)
@@ -271,6 +272,14 @@ struct PathCache
                     {
                         m_pathes[index].tris[d] = tris[d];
                     }
+                    if (parameters)
+                    {
+                        for (int i = 0; i < K * 2; i++)
+                        {
+                            m_pathes[index].parameters[i] = parameters[i];
+                        }
+                    }
+
                     success = true;
                     atomicInc(&m_numberOfCached[0], 0xFFFFFFFF);
                     break;
@@ -301,7 +310,7 @@ struct PathCache
             {
                 continue;
             }
-            f(m_pathes[index].tris);
+            f(m_pathes[index].tris, m_pathes[index].parameters);
         }
     }
 
@@ -377,10 +386,10 @@ template <int K, class callback = SolverEmptyCallback >
 PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
 {
     const int nParameters = K * 2;
-    for (int i = 0; i < nParameters; i++)
-    {
-        parameters[i] = 1.0f / 3.0f;
-    }
+    //for (int i = 0; i < nParameters; i++)
+    //{
+    //    parameters[i] = 1.0f / 3.0f;
+    //}
 
     for (int iter = 0; iter < maxIterations; iter++)
     {

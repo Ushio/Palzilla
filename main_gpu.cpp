@@ -219,6 +219,10 @@ int main()
             DrawXYZAxis(1.0f);
         }
 
+        //static glm::vec3 P2 = { 0.0109809, -0.1, -0.239754f };
+        //ManipulatePosition(camera, &P2, 0.3f);
+        //DrawText(P2, "P2");
+
         //pr::PrimBegin(pr::PrimitiveMode::Lines);
 
         //for (auto tri : triangles)
@@ -233,6 +237,10 @@ int main()
         //}
 
         //pr::PrimEnd();
+
+        //static glm::vec3 P2 = { 0.0109809, -0.1, -0.239754f };
+        //ManipulatePosition(camera, &P2, 0.1f);
+        //DrawText(P2, "P2");
 
         // static glm::vec3 p_light = { 0, 2, 1 };
         static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
@@ -360,8 +368,11 @@ int main()
             printf("%s %f\n", solveSpecular, sw.getElapsedMs());
         };
 
+        solveSpecular(1, { Event::T });
+
+        // a bit of sus...
         //solveSpecular(1, { Event::R });
-        solveSpecular(2, { Event::T, Event::T });
+        //solveSpecular(2, { Event::T, Event::T });
         //solveSpecular(3, { Event::T,Event::R, Event::T });
         //solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
         //solveSpecular(4, { Event::T, Event::R, Event::R, Event::T });
@@ -398,7 +409,10 @@ int main()
         ImGui::Text("fps = %f", GetFrameRate());
 
         ImGui::Text("spp : %d", iteration);
-        ImGui::InputFloat("eta", &eta, 0.05f);
+        if (ImGui::InputFloat("eta", &eta, 0.05f))
+        {
+            clearAccumulation();
+        }
         if (ImGui::InputFloat("minThroughput", &minThroughput, 0.01f))
         {
             clearAccumulation();

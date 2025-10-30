@@ -203,7 +203,7 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
     float3 L = {};
     float3 light_intencity = { 1, 1, 1 };
 
-    pathCache->lookUp(p, [&](const int triIndices[]) {
+    pathCache->lookUp(p, [&](const int triIndices[], const float photon_parameters[]) {
         minimum_lbvh::Triangle tris[K];
         TriangleAttrib attribs[K];
         for (int k = 0; k < K; k++)
@@ -213,6 +213,11 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
             attribs[k] = triangleAttribs[indexOfTri];
         }
         float parameters[K * 2];
+        for (int i = 0; i < K * 2; i++)
+        {
+            parameters[i] = photon_parameters[i];
+            //parameters[i] = 1.0f / 3.0f;
+        }
         bool converged = solveConstraints<K>(parameters, p_light, p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
         if (converged)
@@ -283,6 +288,7 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
 
         bool admissiblePath = false;
         int triIndices[K];
+        float parameters[K * 2];
         float3 p_final;
         float throughtput = 1.0f;
         for (int d = 0; d < K + 1; d++)
@@ -316,6 +322,8 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
 
             float3 wi = -rd;
             triIndices[d] = hit.triangleIndex;
+            parameters[d * 2] = hit.uv.x;
+            parameters[d * 2 + 1] = hit.uv.y;
 
             if (eDescriptor.get(d) == Event::R && (m == Material::Mirror || m == Material::Dielectric))
             {
@@ -358,7 +366,7 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
         bool success = false; 
         if (admissiblePath && minThroughput < throughtput )
         {
-            success = pathCache->store(p_final, triIndices, K);
+            success = pathCache->store(p_final, triIndices, parameters, K);
 
             //if (success)
             //{

@@ -941,7 +941,7 @@ int main() {
         printf("numberOfNewton %d\n", numberOfNewton);
 #endif
 
-#if 1
+#if 0
         int numberOfNewton = 0;
 
         enum {
@@ -962,6 +962,11 @@ int main() {
             deltaPolygonSoup.builder.m_rootNode,
             [&](AdmissibleTriangles<K> admissibleTriangles) {
                 
+                //    admissibleTriangles.indices[1] != 5701 ||
+                //    admissibleTriangles.indices[2] != 7833)
+                //{
+                //    return;
+                //}
 
                 //bool debug = admissibleTriangles.indices[0] == 25 && admissibleTriangles.indices[1] == 91;
                 //if (debug)
@@ -1052,7 +1057,7 @@ int main() {
                         float3 ro = vertices[0];
                         float3 rd = vertices[1] - vertices[0];
 
-                        for (int i = 0; i < 3; i++)
+                        for (int i = 0; i < 16; i++)
                         {
                             minimum_lbvh::Hit hit;
                             minimum_lbvh::intersect_stackfree(&hit, 
@@ -1063,6 +1068,7 @@ int main() {
 
                             if (hit.t == MINIMUM_LBVH_FLT_MAX)
                             {
+                                DrawArrow(to(ro), to(ro + normalize(rd) * 0.5f), 0.003f, { 255, 255, 255 });
                                 break;
                             }
 
@@ -1073,6 +1079,8 @@ int main() {
                                 (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
                                 (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
 
+                            float3 p_hit = ro + rd * hit.t;
+
                             float thisEta = eta;
                             if (0.0f < dot(n, rd))
                             {
@@ -1080,17 +1088,36 @@ int main() {
                                 thisEta = 1.0f / thisEta;
                             }
 
+                            float3 ng_norm = normalize(hit.ng);
 
                             float3 wi = -rd;
                             float3 wo;
-                            if (refraction_norm_free(&wo, wi, n, thisEta))
+                            if (eDescriptor.get(i) == Event::R)
                             {
-                                DrawLine(to(ro), to(ro + rd * hit.t), { 255, 0, 0 }, 3);
+                                wo = reflection(wi, n);
 
-                                ro = ro + rd * hit.t - normalize(n) * 0.000001f /* T */;
+                                DrawLine(to(p_hit), to(p_hit + normalize(n) * 0.1f), { 255, 0, 255 }, 3);
+
+                                DrawLine(to(ro), to(p_hit), { 255, 0, 0 }, 3);
+
+                                ro = p_hit + (dot(wo, ng_norm) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                                 rd = wo;
 
-                                DrawArrow(to(ro), to(ro + rd * 0.2f), 0.003f, {0, 255, 0});
+                                // DrawArrow(to(ro), to(ro + rd * 0.1f), 0.003f, { 0, 255, 0 });
+                                DrawArrow(to(ro), to(ro + rd * 0.1f), 0.003f, { 0, 255, 0 });
+                            }
+                            else
+                            {
+                                if (refraction_norm_free(&wo, wi, n, thisEta))
+                                {
+                                    DrawLine(to(ro), to(ro + rd * hit.t), { 255, 0, 0 }, 3);
+
+                                    ro = p_hit + (dot(wo, ng_norm) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
+                                    rd = wo;
+
+                                    // DrawArrow(to(ro), to(ro + rd * 0.1f), 0.003f, { 0, 255, 0 });
+                                    DrawArrow(to(ro), to(ro + rd * 0.1f), 0.003f, {0, 255, 0});
+                                }
                             }
                         }
                     }
@@ -1128,7 +1155,10 @@ int main() {
             DrawLine(to(tri0.vs[i]), to(tri0.vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
         }
 
-        static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
+        //static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
+
+        static glm::vec3 P0 = { 2.33553f, 2.75754f, 0.0635619f }; // difficult case
+
         // static glm::vec3 P0 = { 0.313918f, 1.19825f, -0.302908f };
         ManipulatePosition(camera, &P0, 0.3f);
 
@@ -1362,13 +1392,22 @@ int main() {
             }
         }
 
+        static float initials[4] = { 1.0f / 3.0f,1.0f / 3.0f ,1.0f / 3.0f ,1.0f / 3.0f };
+
         if (1)
         {
             // 2 Events
+            //static minimum_lbvh::Triangle tri1 = {
+            //    float3 {2.3f, 1.5f, -1.0f},
+            //    float3 {-0.539949894f, 1.5f, -0.342208207f },
+            //    float3 {1.1f, 1.5f, 1.6f},
+            //};
+
+            // difficult case
             static minimum_lbvh::Triangle tri1 = {
-                float3 {2.3f, 1.5f, -1.0f},
-                float3 {-0.539949894f, 1.5f, -0.342208207f },
-                float3 {1.1f, 1.5f, 1.6f},
+                float3 {2.03422093f, 1.39305758f, -1.00000763f},
+                float3 {1.79971433f, 2.77619171f, -0.342213452 },
+                float3 {2.27829790f, 2.11103225f, 1.60000360f},
             };
 
             for (int i = 0; i < 3; i++)
@@ -1401,8 +1440,8 @@ int main() {
             };
 
             TriangleAttrib admissibleAttribs[K] = {
-                curved_dielectric(admissibleTriangles[0], 0.5f ),
-                curved_dielectric(admissibleTriangles[1], 0.5f ),
+                curved_dielectric(admissibleTriangles[0], 0.25f ),
+                curved_dielectric(admissibleTriangles[1], 0.25f),
             };
 
             for (int k = 0; k < K; k++)
@@ -1420,9 +1459,14 @@ int main() {
             es.set(1, Event::T);
             es.set(0, Event::T);
 
+
             const int nParameters = K * 2;
             float parameters[nParameters];
-            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 1.3f, es, 32, 1.0e-7f, [&](int iter, bool converged) {
+            for (int i = 0; i < nParameters; i++)
+            {
+                parameters[i] = initials[i];
+            }
+            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 1.3f, es, 1024, 1.0e-7f, [&](int iter, bool converged) {
                 float3 vertices[K + 2];
                 vertices[0] = to(P0);
                 vertices[K + 1] = to(P2);
@@ -1477,6 +1521,7 @@ int main() {
 #endif
 
         // Rendering
+        {
 #if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
@@ -1505,13 +1550,13 @@ int main() {
 
         // Photon Trace
         enum {
-            K = 3
+            K = 2
         };
         // EventDescriptor eDescriptor = { Event::R };
-        //EventDescriptor eDescriptor = { Event::T, Event::T };
+        EventDescriptor eDescriptor = { Event::T, Event::T };
         // EventDescriptor eDescriptor = { Event::T, Event::T, Event::T, Event::T };
         //EventDescriptor eDescriptor = { Event::T, Event::R, Event::R, Event::T };
-        EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
+        //EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
 
         for (int iTri = 0; iTri < polygonSoup.triangles.size(); iTri++)
         {
@@ -1547,6 +1592,7 @@ int main() {
                 float throughtput = 1.0f;
                 bool admissiblePath = false;
                 int triIndices[K];
+                float parameters[K * 2];
                 float3 p_final;
                 for (int d = 0; d < K + 1; d++)
                 {
@@ -1579,6 +1625,8 @@ int main() {
                     }
                     float3 wi = -rd;
                     triIndices[d] = hit.triangleIndex;
+                    parameters[d * 2] = hit.uv.x;
+                    parameters[d * 2 + 1] = hit.uv.y;
 
                     if ( eDescriptor.get(d) == Event::R && (m == Material::Mirror || m == Material::Dielectric ))
                     {
@@ -1626,7 +1674,7 @@ int main() {
                 {
                     if (admissibleT < throughtput)
                     {
-                        success = pathCache.store(p_final, triIndices, K);
+                        success = pathCache.store(p_final, triIndices, parameters, K);
                         if (success)
                         {
                             // DrawPoint(to(p_final), { 255, 0, 0 }, 2);
@@ -1734,7 +1782,7 @@ int main() {
                 //            attribs[k] = deltaPolygonSoup.triangleAttribs[index];
                 //        }
 
-                //        float parameters[4];
+                //        float parameters[4]; //todo init
                 //        bool converged = solveConstraints<K>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
                 //        if (converged)
@@ -1752,7 +1800,7 @@ int main() {
 
                 //});
 
-                pathCache.lookUp(p, [&](const int triIndices[]) {
+                pathCache.lookUp(p, [&](const int triIndices[], const float photon_parameters[]) {
                     minimum_lbvh::Triangle tris[K];
                     TriangleAttrib attribs[K];
                     for (int k = 0; k < K; k++)
@@ -1763,6 +1811,10 @@ int main() {
                     }
 
                     float parameters[K * 2];
+                    for (int i = 0; i < K * 2; i++)
+                    {
+                        parameters[i] = photon_parameters[i];
+                    }
                     bool converged = solveConstraints<K>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
                     if (converged)
@@ -1810,6 +1862,7 @@ int main() {
 
         //pr::PrimEnd();
 #endif
+        }
         PopGraphicState();
         EndCamera();
 
@@ -1820,6 +1873,13 @@ int main() {
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
+
+        //ImGui::SliderFloat("initials0", &initials[0], 0, 1);
+        //ImGui::SliderFloat("initials1", &initials[1], 0, 1);
+        //ImGui::SliderFloat("initials2", &initials[2], 0, 1);
+        //ImGui::SliderFloat("initials3", &initials[3], 0, 1);
+        
+
         //ImGui::InputFloat("admissibleT", &admissibleT, 0.01f);
 
         //ImGui::InputInt("terminationCount", &terminationCount);
