@@ -62,9 +62,9 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float3 ro, rd;
     rayGenerator.shoot(&ro, &rd, (float)(xi + jitter.x) / imageSize.x, (float)(yi + jitter.y) / imageSize.y);
 
-    float2 eta_random;
-    sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, dimLevel++);
-    float lambda = CIE_2015_10deg::cmf_y_sample(eta_random.x);
+    float2 lambda_random;
+    sobol::shuffled_scrambled_sobol_2d(&lambda_random.x, &lambda_random.y, iteration, xi, yi, dimLevel++);
+    float lambda = CIE_2015_10deg::cmf_y_sample(lambda_random.x);
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
     float eta = cauchy(lambda);
 
@@ -239,9 +239,9 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
             //parameters[i] = 1.0f / 3.0f;
         }
 
-        float2 eta_random;
-        sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, 178);
-        float lambda = CIE_2015_10deg::cmf_y_sample(eta_random.x);
+        float2 lambda_random;
+        sobol::shuffled_scrambled_sobol_2d(&lambda_random.x, &lambda_random.y, iteration, xi, yi, 178);
+        float lambda = CIE_2015_10deg::cmf_y_sample(lambda_random.x);
         float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
 
         float eta = cauchy(lambda);
