@@ -904,7 +904,7 @@ namespace CIE_2015_10deg
     PK_DEVICE inline float logistic_pdf(float x, float s)
     {
         float k = expf(-fabsf(x) / s);
-        return s * k / ((1.0 + k) * (1.0 + k));
+        return k / ((1.0 + k) * (1.0 + k) * s);
     }
     PK_DEVICE inline float logistic_cdf(float x, float s)
     {
@@ -916,23 +916,18 @@ namespace CIE_2015_10deg
         if (u < 1.175494351e-38f) { u = 1.175494351e-38f; }
         return -s * logf(1.0f / u - 1.0f);
     }
-    PK_DEVICE inline float trimmed_logistic_pdf(float x, float s, float a, float b)
-    {
-        return logistic_pdf(x, s) / (logistic_cdf(b, s) - logistic_cdf(a, s));
-    }
-
     PK_DEVICE inline float cmf_y_pdf(float x) {
         float sx = x - 554.270751953125f;
         float s = 26.879621505737305f;
-        float a = -164.270751953125;
-        float b = 275.729248046875;
-        return logistic_pdf(sx, 26.879621505737305f) / (logistic_cdf(b, s) - logistic_cdf(a, s));
+        float a = -164.270751953125f;
+        float b = 275.729248046875f;
+        return logistic_pdf(sx, s) / (logistic_cdf(b, s) - logistic_cdf(a, s));
     }
 
     PK_DEVICE inline float cmf_y_sample(float u) {
         float s = 26.879621505737305f;
-        float a = -164.270751953125;
-        float b = 275.729248046875;
+        float a = -164.270751953125f;
+        float b = 275.729248046875f;
         float Pa = logistic_cdf(a, s);
         float Pb = logistic_cdf(b, s);
         return inverse_logistic_cdf(Pa + (Pb - Pa) * u, s) + 554.270751953125f;

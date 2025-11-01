@@ -172,8 +172,8 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
 
     float2 eta_random;
     sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, dimLevel++);
-    float lambda = lerp(VISIBLE_SPECTRUM_MIN, VISIBLE_SPECTRUM_MAX, eta_random.x);
-    float p_lambda = 1.0f / (VISIBLE_SPECTRUM_MAX - VISIBLE_SPECTRUM_MIN);
+    float lambda = CIE_2015_10deg::cmf_y_sample(eta_random.x);
+    float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
 
     float3 L = {};
 
@@ -240,8 +240,9 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
 
         float2 eta_random;
         sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, 178);
-        float lambda = lerp(VISIBLE_SPECTRUM_MIN, VISIBLE_SPECTRUM_MAX, eta_random.x);
-        float p_lambda = 1.0f / (VISIBLE_SPECTRUM_MAX - VISIBLE_SPECTRUM_MIN);
+        float lambda = CIE_2015_10deg::cmf_y_sample(eta_random.x);
+        float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
+
         float eta = cauchy(lambda);
         // float eta = cauchy(500.0f);
         bool converged = solveConstraints<K>(parameters, p_light, p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
