@@ -189,7 +189,7 @@ int main()
     ITexture* texture = CreateTexture();
 
     Camera3D camera;
-    camera.origin = { 2, 2, -2 };
+    camera.origin = { 1, 1, -1 };
     camera.lookat = { 0, 0, 0 };
 
     float lightIntencity = 1.0f;
@@ -268,7 +268,11 @@ int main()
         RayGenerator rayGenerator;
         rayGenerator.lookat(to(camera.origin), to(camera.lookat), to(camera.up), camera.fovy, imageWidth, imageHeight);
 
-        static float eta = 1.6f;
+        //static float eta = 1.6f;
+        CauchyDispersion cauchy = BAF10_optical_glass();
+        // CauchyDispersion cauchy(1.6f);
+        float eta = cauchy(500.0f);
+
         static float minThroughput = 0.05f;
 
         DeviceStopwatch sw(0);
@@ -317,7 +321,8 @@ int main()
                 .value(triangleAttribsDevice.data())
                 .value(to(p_light))
                 .value(eDescriptor)
-                .value(eta)
+                .value(cauchy(VISIBLE_SPECTRUM_MIN))
+                .value(cauchy(VISIBLE_SPECTRUM_MAX))
                 .value(iteration)
                 .ptr(&pathCache)
                 .value(minThroughput)
@@ -361,7 +366,7 @@ int main()
                 .value(lightIntencity)
                 .ptr(&pathCache)
                 .value(eDescriptor)
-                .value(eta)
+                .value(cauchy)
                 .value(iteration),
                 div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
                 16, 16, 1,
@@ -372,16 +377,16 @@ int main()
             printf("%s %f\n", solveSpecular, sw.getElapsedMs());
         };
 
-        solveSpecular(1, { Event::T });
+        //solveSpecular(1, { Event::T });
 
         // a bit of sus...
         //solveSpecular(1, { Event::R });
-        //solveSpecular(2, { Event::T, Event::T });
-        //solveSpecular(3, { Event::T,Event::R, Event::T });
+        solveSpecular(2, { Event::T, Event::T });
+        // solveSpecular(3, { Event::T,Event::R, Event::T });
         //solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
         //solveSpecular(4, { Event::T, Event::R, Event::R, Event::T });
 
-        //solveSpecular(1, { Event::R });
+        // solveSpecular(1, { Event::R });
         //solveSpecular(2, { Event::R, Event::R });
         //solveSpecular(3, { Event::R, Event::R, Event::R });
         //solveSpecular(4, { Event::R, Event::R, Event::R, Event::R });

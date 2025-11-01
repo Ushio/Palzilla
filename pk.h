@@ -856,6 +856,110 @@ PK_DEVICE inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Tr
     return dAdwValue;
 }
 
+#define VISIBLE_SPECTRUM_MIN 390.0f
+#define VISIBLE_SPECTRUM_MAX 830.0f
+
+struct CauchyDispersion
+{
+    PK_DEVICE CauchyDispersion(float constantEta) : m_A(constantEta), m_B(0.0f)
+    {
+    }
+    PK_DEVICE CauchyDispersion(float A, float B) : m_A(A), m_B(B)
+    {
+    }
+    PK_DEVICE float operator()(float nm) const
+    {
+        return m_A + m_B / (nm * nm);
+    }
+    float m_A;
+    float m_B;
+};
+
+PK_DEVICE inline CauchyDispersion BAF10_optical_glass()
+{
+    return CauchyDispersion(1.64732f, 7907.16861);
+}
+
+namespace CIE_2015_10deg
+{
+    PK_DEVICE inline float asymmetric_gaussian(float x, float mean, float sigma, float a) {
+        float denom = sigma + a * (x - mean);
+        if (denom < 1.0e-15f) { denom = 1.0e-15f; }
+        if (sigma * 2.0f < denom) { denom = sigma * 2.0f; }
+        float k = (x - mean) / denom;
+        return expf(-k * k);
+    }
+    PK_DEVICE inline float cmf_x(float x) {
+        float a = 0.42f * asymmetric_gaussian(x, 445.5849609375f, 31.146467208862305f, 0.06435633450746536f);
+        float b = 1.16f * asymmetric_gaussian(x, 594.5570068359375f, 48.602108001708984f, -0.04772702232003212f);
+        return (a + b - a * b * 42.559776306152344f) * 1.0008530432426956f;
+    }
+    PK_DEVICE inline float cmf_y(float x) {
+        return 1.0f * asymmetric_gaussian(x, 556.8383178710938f, 66.54190826416016f, -0.026492968201637268f) * 1.004315086937574;
+    }
+    PK_DEVICE inline float cmf_z(float x) {
+        return 2.146832f * asymmetric_gaussian(x, 445.9251708984375f, 30.91781997680664f, 0.08379141241312027f) * 0.9975112815948937;
+    }
+
+    PK_DEVICE inline float logistic_pdf(float x, float s)
+    {
+        float k = expf(-fabsf(x) / s);
+        return s * k / ((1.0 + k) * (1.0 + k));
+    }
+    PK_DEVICE inline float logistic_cdf(float x, float s)
+    {
+        return 1.0f / (1.0f + expf(-x / s));
+    }
+    PK_DEVICE inline float inverse_logistic_cdf(float u, float s)
+    {
+        if (0.99999994f < u) { u = 0.99999994f; }
+        if (u < 1.175494351e-38f) { u = 1.175494351e-38f; }
+        return -s * logf(1.0f / u - 1.0f);
+    }
+    PK_DEVICE inline float trimmed_logistic_pdf(float x, float s, float a, float b)
+    {
+        return logistic_pdf(x, s) / (logistic_cdf(b, s) - logistic_cdf(a, s));
+    }
+
+    PK_DEVICE inline float cmf_y_pdf(float x) {
+        float sx = x - 554.270751953125f;
+        float s = 26.879621505737305f;
+        float a = -164.270751953125;
+        float b = 275.729248046875;
+        return logistic_pdf(sx, 26.879621505737305f) / (logistic_cdf(b, s) - logistic_cdf(a, s));
+    }
+
+    PK_DEVICE inline float cmf_y_sample(float u) {
+        float s = 26.879621505737305f;
+        float a = -164.270751953125;
+        float b = 275.729248046875;
+        float Pa = logistic_cdf(a, s);
+        float Pb = logistic_cdf(b, s);
+        return inverse_logistic_cdf(Pa + (Pb - Pa) * u, s) + 554.270751953125f;
+    }
+}
+
+PK_DEVICE inline float3 xyz2srgblinear(float3 xyz)
+{
+    float3 srgblinear = {
+		dot({3.2406f, -1.5372f, -0.4986}, xyz),
+		dot({-0.9689f,  1.8758f,  0.0415f}, xyz),
+		dot({0.0557f, -0.204f,   1.057f}, xyz),
+	};
+    return srgblinear;
+}
+PK_DEVICE inline float srgb_oetf( float r )
+{
+    r = fmaxf(r, 0.0f);
+    if (r <= 0.003130f)
+    {
+        return 12.92f * r;
+    }
+    return 1.055f * powf(r, 1.0f / 2.4f) - 0.055f;
+}
+
+#define INTEGRAL_OF_CMF_Y_IN_NM 118.51810464018001f
+
 #if !defined(PK_KERNELCC)
 
 struct InternalNormalBound

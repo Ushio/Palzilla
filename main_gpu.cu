@@ -170,12 +170,26 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float chess = (x + z) % 2;
     float3 reflectance = lerp(float3{ 0.5f, 0.5f, 0.5f }, float3{ 0.75f, 0.75f, 0.75f }, chess);
 
+    float2 eta_random;
+    sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, dimLevel++);
+    float lambda = lerp(VISIBLE_SPECTRUM_MIN, VISIBLE_SPECTRUM_MAX, eta_random.x);
+    float p_lambda = 1.0f / (VISIBLE_SPECTRUM_MAX - VISIBLE_SPECTRUM_MIN);
+
     float3 L = {};
 
     bool invisible = occluded(internals, triangles, *rootNode, p, n, p_light, { 0, 0, 0 });
     if (!invisible)
     {
-        L += reflectance * lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
+        //L += reflectance * lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
+        float contrib = lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
+
+        float3 xyz = {
+            CIE_2015_10deg::cmf_x(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
+            CIE_2015_10deg::cmf_y(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
+            CIE_2015_10deg::cmf_z(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
+        };
+        float3 srgblinear = xyz2srgblinear(xyz);
+        L += reflectance /* diffuse reflectance */ * srgblinear * contrib / p_lambda;
     }
 
     firstDiffuses[pixel].p = p;
@@ -186,7 +200,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
 }
 
 template <int K>
-__device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, PathCache* pathCache, EventDescriptor eDescriptor, float eta, int iteration)
+__device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, PathCache* pathCache, EventDescriptor eDescriptor, CauchyDispersion cauchy, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -223,6 +237,13 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
             parameters[i] = photon_parameters[i];
             //parameters[i] = 1.0f / 3.0f;
         }
+
+        float2 eta_random;
+        sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, 178);
+        float lambda = lerp(VISIBLE_SPECTRUM_MIN, VISIBLE_SPECTRUM_MAX, eta_random.x);
+        float p_lambda = 1.0f / (VISIBLE_SPECTRUM_MAX - VISIBLE_SPECTRUM_MIN);
+        float eta = cauchy(lambda);
+        // float eta = cauchy(500.0f);
         bool converged = solveConstraints<K>(parameters, p_light, p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
         if (converged)
@@ -234,18 +255,28 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
             if (0.0f < throughput)
             {
                 float dAdwValue = dAdw(p_light, getVertex(0, tris, parameters) - p_light, p, tris, attribs, eDescriptor, K, eta);
-                L += throughput * R * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+                // L += throughput * R * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+
+                float contrib = throughput * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
+
+                float3 xyz = {
+                    CIE_2015_10deg::cmf_x(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
+                    CIE_2015_10deg::cmf_y(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
+                    CIE_2015_10deg::cmf_z(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
+                };
+                float3 srgblinear = xyz2srgblinear(xyz);
+                L += R /* diffuse reflectance */ * srgblinear * contrib / p_lambda;
             }
         }
-        });
+    });
 
     accumulators[pixel] += {L.x, L.y, L.z, 0.0f};
 }
 
 #define DECL_SOLVE_SPECULAR_TRACE( k ) \
-extern "C" __global__ void __launch_bounds__(16 * 16) solveSpecular_K##k(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, PathCache pathCache, EventDescriptor eDescriptor, float eta, int iteration) \
+extern "C" __global__ void __launch_bounds__(16 * 16) solveSpecular_K##k(float4* accumulators, const FirstDiffuse* firstDiffuses, int2 imageSize, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, PathCache pathCache, EventDescriptor eDescriptor, CauchyDispersion cauchy, int iteration) \
 {\
-    solveSpecular<k>(accumulators, firstDiffuses, imageSize, rootNode, internals, triangles, triangleAttribs, p_light, lightIntencity, &pathCache, eDescriptor, eta, iteration);\
+    solveSpecular<k>(accumulators, firstDiffuses, imageSize, rootNode, internals, triangles, triangleAttribs, p_light, lightIntencity, &pathCache, eDescriptor, cauchy, iteration);\
 }
 
 DECL_SOLVE_SPECULAR_TRACE(1);
@@ -258,7 +289,7 @@ DECL_SOLVE_SPECULAR_TRACE(7);
 
 
 template <int K>
-__device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache* pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)
+__device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta_min, float eta_max, int iteration, PathCache* pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)
 {
     int iTri = blockIdx.x;
     if (attribs[iTri].material == Material::Diffuse)
@@ -283,6 +314,10 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
         float2 params = {};
         sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, iteration, iTri, 789);
         params = square2triangle(params);
+
+        float2 eta_random;
+        sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, j * blockDim.x + threadIdx.x, iteration, iTri, 178);
+        float eta = lerp(eta_min, eta_max, eta_random.x);
 
         float3 e0 = tri.vs[1] - tri.vs[0];
         float3 e1 = tri.vs[2] - tri.vs[0];
@@ -396,9 +431,9 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
 }
 
 #define DECL_PHOTON_TRACE( k ) \
-extern "C" __global__ void __launch_bounds__(32) photonTrace_K##k(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)\
+extern "C" __global__ void __launch_bounds__(32) photonTrace_K##k(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, EventDescriptor eDescriptor, float eta_min, float eta_max, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)\
 {\
-    photonTrace<k>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta, iteration, &pathCache, minThroughput, debugPoints, debugPointCount);\
+    photonTrace<k>(rootNode, internals, triangles, attribs, p_light, eDescriptor, eta_min, eta_max, iteration, &pathCache, minThroughput, debugPoints, debugPointCount);\
 }
 
 DECL_PHOTON_TRACE(1)
@@ -418,9 +453,9 @@ extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
     }
     float4 acc = accumulators[xi];
     pixels[xi] = packRGBA({
-        powf(acc.x / acc.w, 1.0f / 2.2f),
-        powf(acc.y / acc.w, 1.0f / 2.2f),
-        powf(acc.z / acc.w, 1.0f / 2.2f),
+        srgb_oetf(acc.x / acc.w),
+        srgb_oetf(acc.y / acc.w),
+        srgb_oetf(acc.z / acc.w),
         1.0f }
     );
 }
