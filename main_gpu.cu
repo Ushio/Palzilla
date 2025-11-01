@@ -43,7 +43,7 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
 }
 
 
-extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float eta /* = eta_t / eta_i */, int iteration)
+extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, CauchyDispersion cauchy, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -61,6 +61,12 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
 
     float3 ro, rd;
     rayGenerator.shoot(&ro, &rd, (float)(xi + jitter.x) / imageSize.x, (float)(yi + jitter.y) / imageSize.y);
+
+    float2 eta_random;
+    sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, dimLevel++);
+    float lambda = CIE_2015_10deg::cmf_y_sample(eta_random.x);
+    float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
+    float eta = cauchy(lambda);
 
     bool hasDiffuseHit = false;
     minimum_lbvh::Hit hit_last;
@@ -169,11 +175,6 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     int z = floor(p.z * scale);
     float chess = (x + z) % 2;
     float3 reflectance = lerp(float3{ 0.5f, 0.5f, 0.5f }, float3{ 0.75f, 0.75f, 0.75f }, chess);
-
-    float2 eta_random;
-    sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, iteration, xi, yi, dimLevel++);
-    float lambda = CIE_2015_10deg::cmf_y_sample(eta_random.x);
-    float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
 
     float3 L = {};
 

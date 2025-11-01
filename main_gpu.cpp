@@ -271,7 +271,6 @@ int main()
         //static float eta = 1.6f;
         CauchyDispersion cauchy = BAF10_optical_glass();
         // CauchyDispersion cauchy(1.6f);
-        float eta = cauchy(500.0f);
 
         static float minThroughput = 0.05f;
 
@@ -291,7 +290,7 @@ int main()
             .value(triangleAttribsDevice.data())
             .value(to(p_light))
             .value(lightIntencity)
-            .value(eta)
+            .value(cauchy)
             .value(iteration),
             div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
             16, 16, 1,
@@ -418,10 +417,10 @@ int main()
         ImGui::Text("fps = %f", GetFrameRate());
 
         ImGui::Text("spp : %d", iteration);
-        if (ImGui::InputFloat("eta", &eta, 0.05f))
-        {
-            clearAccumulation();
-        }
+        //if (ImGui::InputFloat("eta", &eta, 0.05f))
+        //{
+        //    clearAccumulation();
+        //}
         if (ImGui::InputFloat("minThroughput", &minThroughput, 0.01f))
         {
             clearAccumulation();
