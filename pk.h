@@ -175,7 +175,7 @@ PK_DEVICE inline uint32_t spacial_hash(float3 p, float spacial_step) {
 struct PathCache
 {
     enum {
-        MAX_PATH_LENGTH = 7,
+        MAX_PATH_LENGTH = 10,
         CACHE_STORAGE_COUNT = 1u << 22
     };
 
@@ -878,6 +878,10 @@ struct CauchyDispersion
 PK_DEVICE inline CauchyDispersion BAF10_optical_glass()
 {
     return CauchyDispersion(1.64732f, 7907.16861);
+}
+PK_DEVICE inline CauchyDispersion diamond()
+{
+    return CauchyDispersion(2.38272f, 12030.62f);
 }
 
 namespace CIE_2015_10deg
