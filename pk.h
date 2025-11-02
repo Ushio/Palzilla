@@ -535,8 +535,8 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
        (tris[0].vs[1] - tris[0].vs[0]) * parameters[0] +
        (tris[0].vs[2] - tris[0].vs[0]) * parameters[1];
     float3 rd_base = normalize(firstCenter - p_beg);
-    float3 T0, T1;
-    GetOrthonormalBasis(rd_base, &T0, &T1);
+    float3 T0 = tris[0].vs[1] - tris[0].vs[0];
+    float3 T1 = tris[0].vs[2] - tris[0].vs[0];
 
     for (int iter = 0; iter < maxIterations; iter++)
     {
