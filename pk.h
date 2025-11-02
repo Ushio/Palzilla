@@ -575,6 +575,24 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
                 saka::dval w = dot(p - saka::make_dval3(tri.vs[2]), saka::make_dval3(cross(ng, tri.vs[2] - tri.vs[1])));
                 saka::dval u = dot(p - saka::make_dval3(tri.vs[0]), saka::make_dval3(cross(ng, tri.vs[0] - tri.vs[2])));
 
+                if (u.v < 0.0f || v.v < 0.0f || w.v < 0.0f)
+                {
+                    float3 center = (tri.vs[0] + tri.vs[1] + tri.vs[2]) / 3.0f;
+                    saka::dval3 c = saka::make_dval3(center) - p;
+
+                    A(0, i) = c.x.g;
+                    A(1, i) = c.y.g;
+                    A(2, i) = c.z.g;
+
+                    b(0, 0) = c.x.v;
+                    b(1, 0) = c.y.v;
+                    b(2, 0) = c.z.v;
+
+                    cost = 1.0f;
+
+                    break;
+                }
+
                 saka::dval area = u + v + w;
                 u = u / area;
                 v = v / area;
@@ -641,10 +659,15 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
         }
 
         // SVD based solver
-        // sen::Mat<K * 2, 1> dparams = sen::pinv(A) * b;
+        sen::SVD<3, 2> svd = sen::svd_BV(A);
+        if (svd.converged == false)
+        {
+            return false;
+        }
+        sen::Mat<2, 1> dparams = svd.pinv() * b;
 
         // Householder QR based solver
-        sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
+        // sen::Mat<2, 1> dparams = sen::solve_qr_overdetermined(A, b);
 
         // Normal Equation and Cholesky Decomposition
         //sen::Mat<K * 2, K * 3> AT = sen::transpose(A);

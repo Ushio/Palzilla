@@ -368,6 +368,7 @@ namespace sen
     {
         Mat<cols, cols> V;
         Mat<rows, cols> B; // B = A x J1 x J2 ... JN, where J is rotation
+        bool converged;
 
         SEN_DEVICE float singular(int i) const
         {
@@ -385,7 +386,7 @@ namespace sen
                 float sigma2 = column_dot(B_reg, i_col, i_col);
                 for (int i_row = 0; i_row < B_reg.rows(); i_row++)
                 {
-                    B_reg(i_row, i_col) = sigma2 < tol * tol ? 0.0f : B_reg(i_row, i_col) / sigma2;
+                    B_reg(i_row, i_col) = (sigma2 < tol * tol || converged == false) ? 0.0f : B_reg(i_row, i_col) / sigma2;
                 }
             }
             return V * transpose(B_reg);
@@ -429,6 +430,10 @@ namespace sen
                 {
                     continue; // no rotation
                 }
+                if (isfinite(diag1) == false)
+                {
+                    return { V, B, false };
+                }
 
                 converged = false;
 
@@ -462,7 +467,7 @@ namespace sen
             }
         }
 
-        return { V, B };
+        return { V, B, true };
     }
 
     template <int rows, int cols>
