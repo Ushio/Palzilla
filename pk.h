@@ -555,7 +555,6 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
                 + saka::make_dval3(T0) * differentials[0]
                 + saka::make_dval3(T1) * differentials[1];
 
-            bool inMedium = false;
             for (int j = 0; j < K; j++)
             {
                 minimum_lbvh::Triangle tri = tris[j];
@@ -594,7 +593,7 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
                 saka::dval3 wo;
                 if (eDescriptor.get(j) == Event::T)
                 {
-                    if (inMedium)
+                    if (dot(wi, n).v < 0.0f)
                     {
                         wo = saka::refraction_norm_free(wi, -n, 1.0f / eta);
                         if (wo.x.v == 0.0f && wo.y.v == 0.0f && wo.z.v == 0.0f)
@@ -606,7 +605,6 @@ PK_DEVICE inline bool solveConstraints_v2(float parameters[K * 2], float3 p_beg,
                     {
                         wo = saka::refraction_norm_free(wi, n, eta);
                     }
-                    inMedium = !inMedium;
                 }
                 else
                 {
