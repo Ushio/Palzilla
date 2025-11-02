@@ -43,7 +43,7 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
 }
 
 
-extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, CauchyDispersion cauchy, int iteration)
+extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -70,7 +70,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
 
     bool hasDiffuseHit = false;
     minimum_lbvh::Hit hit_last;
-    for (int d = 0; d < 16; d++)
+    for (int d = 0; d < 32; d++)
     {
         minimum_lbvh::Hit hit;
         minimum_lbvh::intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd));
@@ -170,11 +170,15 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float3 toLight = p_light - p;
     float d2 = dot(toLight, toLight);
 
+#if 0
     float scale = 10.0f;
     int x = floor(p.x * scale);
     int z = floor(p.z * scale);
     float chess = (x + z) % 2;
     float3 reflectance = lerp(float3{ 0.5f, 0.5f, 0.5f }, float3{ 0.75f, 0.75f, 0.75f }, chess);
+#else
+    float3 reflectance = floorTex.samplePoint(p.x, p.z);
+#endif
 
     float3 L = {};
 
@@ -286,8 +290,11 @@ DECL_SOLVE_SPECULAR_TRACE(2);
 DECL_SOLVE_SPECULAR_TRACE(3);
 DECL_SOLVE_SPECULAR_TRACE(4);
 DECL_SOLVE_SPECULAR_TRACE(5);
-DECL_SOLVE_SPECULAR_TRACE(6);
-DECL_SOLVE_SPECULAR_TRACE(7);
+//DECL_SOLVE_SPECULAR_TRACE(6);
+//DECL_SOLVE_SPECULAR_TRACE(7);
+//DECL_SOLVE_SPECULAR_TRACE(8);
+//DECL_SOLVE_SPECULAR_TRACE(9);
+//DECL_SOLVE_SPECULAR_TRACE(10);
 
 
 template <int K>
@@ -443,8 +450,11 @@ DECL_PHOTON_TRACE(2)
 DECL_PHOTON_TRACE(3)
 DECL_PHOTON_TRACE(4)
 DECL_PHOTON_TRACE(5)
-DECL_PHOTON_TRACE(6)
-DECL_PHOTON_TRACE(7)
+//DECL_PHOTON_TRACE(6)
+//DECL_PHOTON_TRACE(7)
+//DECL_PHOTON_TRACE(8)
+//DECL_PHOTON_TRACE(9)
+//DECL_PHOTON_TRACE(10)
 
 extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
 {

@@ -962,6 +962,32 @@ PK_DEVICE inline float srgb_oetf( float r )
 
 #define INTEGRAL_OF_CMF_Y_IN_NM 118.51810464018001f
 
+
+class Texture8RGBX
+{
+public:
+#if !defined(PK_KERNELCC)
+    Texture8RGBX():m_buffer(TYPED_BUFFER_DEVICE), m_width(0), m_height(0){}
+#endif
+    PK_DEVICE float3 samplePoint(float u, float v) const
+    {
+        u = u - floor(u); // repeat
+        v = v - floor(v); // repeat
+
+        int ix = fminf( u * m_width, m_width - 1.0f);
+        int iy = fminf( v * m_height, m_height - 1.0f);
+        int index = ix + m_width * iy;
+        uint8_t r = m_buffer[index * 4];
+        uint8_t g = m_buffer[index * 4 + 1];
+        uint8_t b = m_buffer[index * 4 + 2];
+        float3 color = { powf( r / 255.0f, 2.2f), powf(g / 255.0f, 2.2f), powf(b / 255.0f, 2.2f) };
+        return color;
+    }
+    TypedBuffer<uint8_t> m_buffer;
+    uint32_t m_width;
+    uint32_t m_height;
+};
+
 #if !defined(PK_KERNELCC)
 
 struct InternalNormalBound

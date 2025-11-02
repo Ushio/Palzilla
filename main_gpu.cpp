@@ -58,6 +58,16 @@ private:
     oroEvent m_stop;
 };
 
+void loadTexture(Texture8RGBX* tex, const char* file)
+{
+    pr::Image2DRGBA8 image;
+    image.load(file);
+    tex->m_buffer.allocate(image.bytes());
+    tex->m_width = image.width();
+    tex->m_height = image.height();
+    oroMemcpyHtoD(tex->m_buffer.data(), image.data(), image.bytes());
+}
+
 int main()
 {
     using namespace pr;
@@ -177,7 +187,7 @@ int main()
 
     TypedBuffer<FirstDiffuse> firstDiffuses(TYPED_BUFFER_DEVICE);
 
-    const float spacial_step = 0.025f;
+    const float spacial_step = 0.01f;
     PathCache pathCache(TYPED_BUFFER_DEVICE);
     pathCache.init(spacial_step);
 
@@ -185,6 +195,10 @@ int main()
     TypedBuffer<int> debugPointCount(TYPED_BUFFER_DEVICE);
     debugPoints.allocate(1 << 22);
     debugPointCount.allocate(1);
+
+    Texture8RGBX floorTex;
+    loadTexture(&floorTex, GetDataPath("assets/laminate_floor_02_diff_2k.jpg").c_str());
+
 
     ITexture* texture = CreateTexture();
 
@@ -245,7 +259,9 @@ int main()
         //DrawText(P2, "P2");
 
         // static glm::vec3 p_light = { 0, 2, 1 };
-        static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
+        //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
+        //static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
+        static glm::vec3 p_light = { -0.0703948f, 1.69978f, -1.63343f };
         glm::vec3 prev_p_light = p_light;
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
@@ -270,6 +286,7 @@ int main()
 
         //static float eta = 1.6f;
         CauchyDispersion cauchy = BAF10_optical_glass();
+        //CauchyDispersion cauchy = diamond();
         // CauchyDispersion cauchy(1.6f);
 
         static float minThroughput = 0.05f;
@@ -291,6 +308,7 @@ int main()
             .value(to(p_light))
             .value(lightIntencity)
             .value(cauchy)
+            .ptr(&floorTex)
             .value(iteration),
             div_round_up64(imageWidth, 16), div_round_up64(imageHeight, 16), 1,
             16, 16, 1,
@@ -381,9 +399,15 @@ int main()
         // a bit of sus...
         //solveSpecular(1, { Event::R });
         solveSpecular(2, { Event::T, Event::T });
-        // solveSpecular(3, { Event::T,Event::R, Event::T });
-        //solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
+        //solveSpecular(3, { Event::T,Event::R, Event::T });
         //solveSpecular(4, { Event::T, Event::R, Event::R, Event::T });
+        //solveSpecular(5, { Event::T, Event::R, Event::R, Event::R, Event::T });
+        //solveSpecular(6, { Event::T, Event::R, Event::R, Event::R, Event::R, Event::T });
+        //solveSpecular(7, { Event::T, Event::R, Event::R, Event::R, Event::R, Event::R, Event::T });
+        //solveSpecular(8, { Event::T, Event::R, Event::R, Event::R, Event::R, Event::R, Event::R, Event::T });
+        //solveSpecular(9, { Event::T, Event::R, Event::R, Event::R, Event::R, Event::R, Event::R, Event::R, Event::T });
+        //solveSpecular(10, { Event::T, Event::R, Event::R, Event::R, Event::R, Event::R, Event::R, Event::R, Event::R, Event::T });
+        // solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
 
         // solveSpecular(1, { Event::R });
         //solveSpecular(2, { Event::R, Event::R });
