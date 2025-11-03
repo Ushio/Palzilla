@@ -1170,13 +1170,14 @@ public:
         m_imageWidth = imageWidth;
         m_imageHeight = imageHeight;
 
-        m_pathCache.init(0.01f);
-
-        m_debugPoints.allocate(1 << 22);
-        m_debugPointCount.allocate(1);
 
         if (m_pixels.size() != imageWidth * imageHeight)
         {
+            m_pathCache.init(0.01f);
+
+            m_debugPoints.allocate(1 << 22);
+            m_debugPointCount.allocate(1);
+
             m_pixels.allocate(imageWidth * imageHeight);
             m_accumulators.allocate(imageWidth * imageHeight);
             m_firstDiffuses.allocate(imageWidth * imageHeight);
@@ -1220,10 +1221,9 @@ public:
 
         auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
             oroMemsetD32(m_debugPointCount.data(), 0, 1);
+            m_pathCache.clear();
 
             sw.start();
-
-            m_pathCache.clear();
 
             char photonTrace[128];
             char solveSpecular[128];
@@ -1345,7 +1345,7 @@ public:
     int m_imageWidth = 0;
     int m_imageHeight = 0;
     pr::AbcArchive m_archive;
-    glm::vec3 m_p_light = { 2, 2, 2 };
+    glm::vec3 m_p_light = { -0.804876, 0.121239, -1.58616 };
     float m_lightIntencity = 5.0f;
     float m_minThroughput = 0.05f;
     pr::Camera3D m_camera;
