@@ -5,7 +5,6 @@
 
 #include "interval.h"
 #include "helper_math.h"
-#include "minimum_lbvh.h"
 #include "saka.h"
 #include "sen.h"
 #include "sobol.h"
@@ -45,15 +44,6 @@ inline void clamp_uv(float* u_inout, float* v_inout, minimum_lbvh::Triangle tri)
 }
 
 // TODO unit test
-
-inline glm::vec3 to(float3 p)
-{
-    return { p.x, p.y, p.z };
-}
-inline float3 to(glm::vec3 p)
-{
-    return { p.x, p.y, p.z };
-}
 
 inline void DrawAABB(interval::intr3 bound, glm::u8vec3 c, float lineWidth)
 {
@@ -525,7 +515,7 @@ int main() {
 #if 0
         // refraction
         float margin = 0.2f;
-        float eta = 1.5f;
+        float eta = 1.0f / 1.5f;
 
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
@@ -550,11 +540,11 @@ int main() {
         interval::intr3 wi_range = interval::relax(interval::make_intr3(wi_unnormalized.x, wi_unnormalized.y, wi_unnormalized.z), margin);
         interval::intr3 wo_range;
         
-        DrawAABB(wi_range, { 255, 0, 0 }, 1);
-        if (interval::refraction_norm_free(&wo_range, wi_range, interval::make_intr3(N), eta))
-        {
-            DrawAABB(wo_range, { 0, 255, 0 }, 1);
-        }
+        //DrawAABB(wi_range, { 255, 0, 0 }, 1);
+        //if (interval::refraction_norm_free(&wo_range, wi_range, interval::make_intr3(N), eta))
+        //{
+        //    DrawAABB(wo_range, { 0, 255, 0 }, 1);
+        //}
 
         //interval::intr3 crs = cross(wo_range, interval::make_intr3(wo_unnormalized));
         //DrawAABB(crs, { 255, 255, 255 }, 1);
@@ -585,7 +575,7 @@ int main() {
             DrawArrow({}, to(ht), 0.04f, { 255, 255, 255 });
         }
 
-        if (1)
+        if (0)
         {
             DrawGrid(GridAxis::XY, 1.0f, 10, { 128, 128, 128 });
 
@@ -1130,7 +1120,7 @@ int main() {
 
 #endif 
 
-#if 0
+#if 1
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -1440,8 +1430,8 @@ int main() {
             };
 
             TriangleAttrib admissibleAttribs[K] = {
-                curved_dielectric(admissibleTriangles[0], 0.25f ),
-                curved_dielectric(admissibleTriangles[1], 0.25f),
+                curved_dielectric(admissibleTriangles[0], 0.5f ),
+                curved_dielectric(admissibleTriangles[1], 0.5f),
             };
 
             for (int k = 0; k < K; k++)
@@ -1522,9 +1512,10 @@ int main() {
 
         // Rendering
         {
-#if 1
+#if 0
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
-        static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
+        //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
+        static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
