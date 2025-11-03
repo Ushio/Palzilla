@@ -1,5 +1,7 @@
 #pragma once
 #include "helper_math.h"
+
+#define ENABLE_GPU_BUILDER
 #include "minimum_lbvh.h"
 #include "sen.h"
 #include "saka.h"
@@ -12,6 +14,12 @@
 #define PK_DEVICE __device__
 #else
 #include <initializer_list>
+#include <memory>
+#include "pr.hpp"
+#include "Orochi/Orochi.h"
+#include "shader.h"
+#include "tinyhiponesweep.h"
+#include "camera.h"
 #define PK_DEVICE
 #endif
 
@@ -989,6 +997,362 @@ public:
 };
 
 #if !defined(PK_KERNELCC)
+
+inline glm::vec3 to(float3 p)
+{
+    return { p.x, p.y, p.z };
+}
+inline float3 to(glm::vec3 p)
+{
+    return { p.x, p.y, p.z };
+}
+
+inline void loadTexture(Texture8RGBX* tex, const char* file)
+{
+    pr::Image2DRGBA8 image;
+    image.load(file);
+    tex->m_buffer.allocate(image.bytes());
+    tex->m_width = image.width();
+    tex->m_height = image.height();
+    oroMemcpyHtoD(tex->m_buffer.data(), image.data(), image.bytes());
+}
+
+class DeviceStopwatch
+{
+public:
+    DeviceStopwatch(oroStream stream)
+    {
+        m_stream = stream;
+        oroEventCreateWithFlags(&m_start, oroEventDefault);
+        oroEventCreateWithFlags(&m_stop, oroEventDefault);
+    }
+    ~DeviceStopwatch()
+    {
+        oroEventDestroy(m_start);
+        oroEventDestroy(m_stop);
+    }
+    DeviceStopwatch(const DeviceStopwatch&) = delete;
+    void operator=(const DeviceStopwatch&) = delete;
+
+    void start() { oroEventRecord(m_start, m_stream); }
+    void stop() { oroEventRecord(m_stop, m_stream); }
+
+    float getElapsedMs() const
+    {
+        oroEventSynchronize(m_stop);
+        float ms = 0;
+        oroEventElapsedTime(&ms, m_start, m_stop);
+        return ms;
+    }
+private:
+    oroStream m_stream;
+    oroEvent m_start;
+    oroEvent m_stop;
+};
+
+class PKRenderer
+{
+public:
+    PKRenderer()
+    {
+    }
+    void setup(oroDevice device, const char* scene)
+    {
+        using namespace pr;
+
+        std::vector<std::string> options;
+        options.push_back("-I");
+        options.push_back(GetDataPath("../"));
+
+        m_shader = std::unique_ptr<Shader>(new Shader(GetDataPath("../main_gpu.cu").c_str(), "main_gpu", options));
+        m_onesweep = std::unique_ptr<tinyhiponesweep::OnesweepSort>(new tinyhiponesweep::OnesweepSort(device));
+
+        std::string err;
+        m_archive.open(scene, err);
+        m_gpuBuilder = std::unique_ptr< minimum_lbvh::BVHGPUBuilder>(new minimum_lbvh::BVHGPUBuilder(GetDataPath("../minimum_lbvh.cu").c_str(), GetDataPath("../").c_str()));
+    
+        loadTexture(&m_floorTex, GetDataPath("assets/laminate_floor_02_diff_2k.jpg").c_str());
+    }
+
+    void loadFrame(int frame)
+    {
+        using namespace pr;
+
+        std::vector<minimum_lbvh::Triangle> triangles;
+        std::vector<TriangleAttrib> triangleAttribs;
+
+        std::string err;
+        std::shared_ptr<FScene> scene = m_archive.readFlat(frame, err);
+
+        scene->visitCamera([&](std::shared_ptr<const pr::FCameraEntity> cameraEntity) {
+            if (!cameraEntity->visible())
+            {
+                return;
+            }
+            if (m_loadCamera == false)
+            {
+                return;
+            }
+            m_camera = cameraFromEntity(cameraEntity.get());
+        });
+
+        scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
+            if (polymesh->visible() == false)
+            {
+                return;
+            }
+            std::string name = polymesh->fullname();
+            if (name == "/light/pointlight")
+            {
+                m_p_light = polymesh->localToWorld() * glm::vec4(0, 0, 0, 1);
+                return;
+            }
+
+            AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
+            Material material = Material::Diffuse;
+            if (auto matCol = details->columnAsString("material"))
+            {
+                const std::string& matString = details->columnAsString("material")->get(0);
+                if (matString == "mirror")
+                {
+                    material = Material::Mirror;
+                }
+                else if (matString == "dielectric")
+                {
+                    material = Material::Dielectric;
+                }
+            }
+
+            ColumnView<int32_t> faceCounts(polymesh->faceCounts());
+            ColumnView<int32_t> indices(polymesh->faceIndices());
+            ColumnView<glm::vec3> positions(polymesh->positions());
+            ColumnView<glm::vec3> normals(polymesh->normals());
+
+            int indexBase = 0;
+            for (int i = 0; i < faceCounts.count(); i++)
+            {
+                int nVerts = faceCounts[i];
+                PR_ASSERT(nVerts == 3);
+                minimum_lbvh::Triangle tri;
+                TriangleAttrib attrib;
+                attrib.material = material;
+                for (int j = 0; j < nVerts; ++j)
+                {
+                    glm::vec3 p = positions[indices[indexBase + j]];
+                    tri.vs[j] = { p.x, p.y, p.z };
+
+                    glm::vec3 ns = normals[indexBase + j];
+                    attrib.shadingNormals[j] = { ns.x, ns.y, ns.z };
+                }
+
+                float3 e0 = tri.vs[1] - tri.vs[0];
+                float3 e1 = tri.vs[2] - tri.vs[1];
+                float3 e2 = tri.vs[0] - tri.vs[2];
+
+                triangles.push_back(tri);
+                triangleAttribs.push_back(attrib);
+                indexBase += nVerts;
+            }
+        });
+
+        m_trianglesDevice << triangles;
+        m_triangleAttribsDevice << triangleAttribs;
+
+        m_gpuBuilder->build(m_trianglesDevice.data(), m_trianglesDevice.size(), 0, *m_onesweep, 0 /*stream*/);
+    }
+    int frameCount() const
+    {
+        return m_archive.frameCount();
+    }
+
+    void allocate(int imageWidth, int imageHeight)
+    {
+        m_imageWidth = imageWidth;
+        m_imageHeight = imageHeight;
+
+        m_pathCache.init(0.01f);
+
+        m_debugPoints.allocate(1 << 22);
+        m_debugPointCount.allocate(1);
+
+        if (m_pixels.size() != imageWidth * imageHeight)
+        {
+            m_pixels.allocate(imageWidth * imageHeight);
+            m_accumulators.allocate(imageWidth * imageHeight);
+            m_firstDiffuses.allocate(imageWidth * imageHeight);
+        }
+    }
+
+    void step()
+    {
+        using namespace pr;
+
+        DeviceStopwatch sw(0);
+        sw.start();
+
+        CauchyDispersion cauchy = BAF10_optical_glass();
+
+        RayGenerator rayGenerator;
+        rayGenerator.lookat(to(m_camera.origin), to(m_camera.lookat), to(m_camera.up), m_camera.fovy, m_imageWidth, m_imageHeight);
+
+        m_shader->launch("solvePrimary",
+            ShaderArgument()
+            .value(m_accumulators.data())
+            .value(m_firstDiffuses.data())
+            .value(int2{ m_imageWidth, m_imageHeight })
+            .value(rayGenerator)
+            .value(m_gpuBuilder->m_rootNode)
+            .value(m_gpuBuilder->m_internals)
+            .value(m_trianglesDevice.data())
+            .value(m_triangleAttribsDevice.data())
+            .value(to(m_p_light))
+            .value(m_lightIntencity)
+            .value(cauchy)
+            .ptr(&m_floorTex)
+            .value(m_iteration),
+            div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
+            16, 16, 1,
+            0
+        );
+
+        sw.stop();
+        printf("solvePrimary %f\n", sw.getElapsedMs());
+
+        auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
+            oroMemsetD32(m_debugPointCount.data(), 0, 1);
+
+            sw.start();
+
+            m_pathCache.clear();
+
+            char photonTrace[128];
+            char solveSpecular[128];
+            sprintf(photonTrace, "photonTrace_K%d", K);
+            sprintf(solveSpecular, "solveSpecular_K%d", K);
+
+            m_shader->launch(photonTrace,
+                ShaderArgument()
+                .value(m_gpuBuilder->m_rootNode)
+                .value(m_gpuBuilder->m_internals)
+                .value(m_trianglesDevice.data())
+                .value(m_triangleAttribsDevice.data())
+                .value(to(m_p_light))
+                .value(eDescriptor)
+                .value(cauchy(VISIBLE_SPECTRUM_MIN))
+                .value(cauchy(VISIBLE_SPECTRUM_MAX))
+                .value(m_iteration)
+                .ptr(&m_pathCache)
+                .value(m_minThroughput)
+                .value(m_debugPoints.data())
+                .value(m_debugPointCount.data()),
+                m_gpuBuilder->m_nTriangles, 1, 1,
+                32, 1, 1,
+                0
+            );
+
+            sw.stop();
+            printf("%s %f\n", photonTrace, sw.getElapsedMs());
+
+            printf(" occ %f\n", m_pathCache.occupancy());
+
+            // debug view
+            if (0)
+            {
+                int nPoints = 0;
+                oroMemcpyDtoH(&nPoints, m_debugPointCount.data(), sizeof(int));
+                std::vector<float3> points(nPoints);
+                oroMemcpyDtoH(points.data(), m_debugPoints.data(), sizeof(float3) * nPoints);
+                for (int i = 0; i < nPoints; i++)
+                {
+                    DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
+                }
+            }
+
+            sw.start();
+
+            m_shader->launch(solveSpecular,
+                ShaderArgument()
+                .value(m_accumulators.data())
+                .value(m_firstDiffuses.data())
+                .value(int2{ m_imageWidth, m_imageHeight })
+                .value(m_gpuBuilder->m_rootNode)
+                .value(m_gpuBuilder->m_internals)
+                .value(m_trianglesDevice.data())
+                .value(m_triangleAttribsDevice.data())
+                .value(to(m_p_light))
+                .value(m_lightIntencity)
+                .ptr(&m_pathCache)
+                .value(eDescriptor)
+                .value(cauchy)
+                .value(m_iteration),
+                div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
+                16, 16, 1,
+                0
+            );
+
+            sw.stop();
+            printf("%s %f\n", solveSpecular, sw.getElapsedMs());
+        };
+
+        solveSpecular(1, { Event::T });
+        solveSpecular(1, { Event::R });
+        solveSpecular(2, { Event::T, Event::T });
+
+        m_iteration++;
+    }
+
+    void clear()
+    {
+        oroMemsetD8(m_accumulators.data(), 0, m_accumulators.size() * sizeof(float4));
+        m_iteration = 0;
+    }
+
+    void resolve(pr::Image2DRGBA8 *imageOut)
+    {
+        m_shader->launch("pack",
+            ShaderArgument()
+            .value(m_pixels.data())
+            .value(m_accumulators.data())
+            .value(m_imageWidth * m_imageHeight),
+            div_round_up64(m_imageWidth * m_imageHeight, 256), 1, 1,
+            256, 1, 1,
+            0
+        );
+
+        imageOut->allocate(m_imageWidth, m_imageHeight);
+        oroMemcpyDtoH(imageOut->data(), m_pixels.data(), m_pixels.bytes());
+    }
+
+    std::unique_ptr<Shader> m_shader;
+    std::unique_ptr<tinyhiponesweep::OnesweepSort> m_onesweep;
+    std::unique_ptr< minimum_lbvh::BVHGPUBuilder> m_gpuBuilder;
+
+    TypedBuffer<uint32_t> m_pixels = TypedBuffer<uint32_t>(TYPED_BUFFER_DEVICE);
+    TypedBuffer<float4> m_accumulators = TypedBuffer<float4>(TYPED_BUFFER_DEVICE);
+
+    TypedBuffer<minimum_lbvh::Triangle> m_trianglesDevice = TypedBuffer<minimum_lbvh::Triangle>(TYPED_BUFFER_DEVICE);
+    TypedBuffer<TriangleAttrib> m_triangleAttribsDevice = TypedBuffer<TriangleAttrib>(TYPED_BUFFER_DEVICE);
+
+    PathCache m_pathCache = PathCache(TYPED_BUFFER_DEVICE);
+    TypedBuffer<FirstDiffuse> m_firstDiffuses = TypedBuffer<FirstDiffuse>(TYPED_BUFFER_DEVICE);
+
+    Texture8RGBX m_floorTex;
+
+
+    TypedBuffer<float3> m_debugPoints = TypedBuffer<float3>(TYPED_BUFFER_DEVICE);
+    TypedBuffer<int> m_debugPointCount = TypedBuffer<int>(TYPED_BUFFER_DEVICE);
+
+    int m_imageWidth = 0;
+    int m_imageHeight = 0;
+    pr::AbcArchive m_archive;
+    glm::vec3 m_p_light = { 2, 2, 2 };
+    float m_lightIntencity = 5.0f;
+    float m_minThroughput = 0.05f;
+    pr::Camera3D m_camera;
+
+    bool m_loadCamera = true;
+    int m_iteration = 0;
+};
 
 struct InternalNormalBound
 {
