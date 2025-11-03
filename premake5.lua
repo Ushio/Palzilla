@@ -151,5 +151,7 @@ project "copying"
     systemversion "latest"
     flags { "MultiProcessorCompile", "NoPCH" }
     postbuildcommands { 
-        "{COPYFILE} ../libs/orochi/contrib/bin/win64/*.dll ../bin"
+        "{COPYFILE} ../libs/orochi/contrib/bin/win64/*.dll ../bin",
+        "{COPYFILE} ../*.cu ../bin/kernels",
+        "{COPYFILE} ../*.h ../bin/kernels",
     }

@@ -38,7 +38,7 @@ int main()
     printf("Cuda: %s\n", isNvidia ? "Yes" : "No");
 
     PKRenderer pkRenderer;
-    pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str());
+    pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str(), GetDataPath("kernels").c_str());
     pkRenderer.allocate(1920, 1080);
 
     for (int i = 0; i < pkRenderer.frameCount(); i++)

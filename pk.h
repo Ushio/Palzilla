@@ -1056,20 +1056,20 @@ public:
     PKRenderer()
     {
     }
-    void setup(oroDevice device, const char* scene)
+    void setup(oroDevice device, const char* scene, const char* kernelDir)
     {
         using namespace pr;
 
         std::vector<std::string> options;
         options.push_back("-I");
-        options.push_back(GetDataPath("../"));
+        options.push_back(kernelDir);
 
-        m_shader = std::unique_ptr<Shader>(new Shader(GetDataPath("../main_gpu.cu").c_str(), "main_gpu", options));
+        m_shader = std::unique_ptr<Shader>(new Shader(JoinPath(kernelDir, "main_gpu.cu").c_str(), "main_gpu", options));
         m_onesweep = std::unique_ptr<tinyhiponesweep::OnesweepSort>(new tinyhiponesweep::OnesweepSort(device));
+        m_gpuBuilder = std::unique_ptr< minimum_lbvh::BVHGPUBuilder>(new minimum_lbvh::BVHGPUBuilder(JoinPath(kernelDir, "minimum_lbvh.cu").c_str(), kernelDir));
 
         std::string err;
         m_archive.open(scene, err);
-        m_gpuBuilder = std::unique_ptr< minimum_lbvh::BVHGPUBuilder>(new minimum_lbvh::BVHGPUBuilder(GetDataPath("../minimum_lbvh.cu").c_str(), GetDataPath("../").c_str()));
     
         loadTexture(&m_floorTex, GetDataPath("assets/laminate_floor_02_diff_2k.jpg").c_str());
     }
