@@ -17,13 +17,17 @@ int main()
 
     SetDataDir(ExecutableDir());
 
-    if (oroInitialize((oroApi)(ORO_API_HIP | ORO_API_CUDA), 0))
+    const char* cudart_paths[] = {
+        "cudart64_12.dll",
+        "cudart64_13.dll",
+        NULL };
+    if (oroInitialize((oroApi)(ORO_API_HIP | ORO_API_CUDA), 0, 0, 0, 0, cudart_paths))
     {
         printf("failed to init..\n");
         return 0;
     }
 
-    int DEVICE_INDEX = 2;
+    int DEVICE_INDEX = 0;
     oroInit(0);
     oroDevice device;
     oroDeviceGet(&device, DEVICE_INDEX);
@@ -31,6 +35,9 @@ int main()
     oroCtxCreate(&ctx, 0, device);
     oroCtxSetCurrent(ctx);
 
+#if defined(NO_GET_DEVICE_PROPERTIES)
+    printf("NO_GET_DEVICE_PROPERTIES defined. oroGetDeviceProperties() is skipped\n");
+#else
     oroDeviceProp props;
     oroGetDeviceProperties(&props, device);
 
@@ -38,6 +45,7 @@ int main()
 
     printf("Device: %s\n", props.name);
     printf("Cuda: %s\n", isNvidia ? "Yes" : "No");
+#endif
 
     PKRenderer pkRenderer;
     pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str(), GetDataPath("kernels").c_str());

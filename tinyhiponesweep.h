@@ -704,6 +704,10 @@ private:
 		oroModuleGetFunction(&m_func64.reorderKey, m_module, "onesweep_reorderKey64");
 		oroModuleGetFunction(&m_func64.reorderKeyPair, m_module, "onesweep_reorderKeyPair64");
 
+#if defined(NO_GET_DEVICE_PROPERTIES)
+		m_func32.blocksForCount = 2048;
+		m_func64.blocksForCount = 2048;
+#else
 		oroDeviceProp props = {};
 		oroGetDeviceProperties(&props, device);
 		{
@@ -716,6 +720,7 @@ private:
 			oroError e = oroModuleOccupancyMaxActiveBlocksPerMultiprocessor(&maxBlocksPerMP, m_func64.count, ONESWEEP_COUNT_THREADS_PER_BLOCK, 0);
 			m_func64.blocksForCount = e == oroSuccess ? maxBlocksPerMP * props.multiProcessorCount : 2048;
 		}
+#endif
 	}
 	void allocate()
 	{

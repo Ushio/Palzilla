@@ -77,6 +77,8 @@ project "main_gpu"
     files { "main_gpu.cpp" }
     files { "*.h" }
 
+    defines {"NO_GET_DEVICE_PROPERTIES"}
+
     -- prlib
     -- setup command
     -- git submodule add https://github.com/Ushio/prlib libs/prlib
