@@ -13,6 +13,8 @@
 int main()
 {
     using namespace pr;
+    Stopwatch sw;
+
     SetDataDir(ExecutableDir());
 
     if (oroInitialize((oroApi)(ORO_API_HIP | ORO_API_CUDA), 0))
@@ -46,7 +48,7 @@ int main()
         pkRenderer.loadFrame(i);
         pkRenderer.clear();
 
-        for (int j = 0; j < 32; j++)
+        for (int j = 0; j < 16; j++)
         {
             pkRenderer.step();
         }
@@ -57,7 +59,9 @@ int main()
         char outputFile[128];
         sprintf(outputFile, "%03d.png", i);
 
-        image.saveAsPng(outputFile);
+        image.saveAsPngUncompressed(outputFile);
+
+        printf("frame %03d, %.2f\n", i, sw.elapsed());
     }
 }
 #else
