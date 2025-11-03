@@ -94,6 +94,11 @@ project "main_gpu"
 
     enableOrochi()
 
+    postbuildcommands { 
+        "{COPYFILE} ../*.cu ../bin/kernels",
+        "{COPYFILE} ../*.h ../bin/kernels",
+    }
+
     symbols "On"
 
     filter {"Debug"}
@@ -154,6 +159,4 @@ project "copying"
     flags { "MultiProcessorCompile", "NoPCH" }
     postbuildcommands { 
         "{COPYFILE} ../libs/orochi/contrib/bin/win64/*.dll ../bin",
-        "{COPYFILE} ../*.cu ../bin/kernels",
-        "{COPYFILE} ../*.h ../bin/kernels",
     }
