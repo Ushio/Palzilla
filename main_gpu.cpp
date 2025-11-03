@@ -123,17 +123,22 @@ int main()
     camera.origin = { 1, 1, -1 };
     camera.lookat = { 0, 0, 0 };
 
+    // static glm::vec3 p_light = { 0, 2, 1 };
+    //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
+    //static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
+    glm::vec3 p_light = { -0.483765f, 1.69978f, 1.12299f };
 
     AbcArchive archive;
     std::string err;
     archive.open(GetDataPath("assets/scene.abc"), err);
 
     bool syncCamera = true;
+    bool syncLight = true;
     int frameNumber = 0;
     TypedBuffer<minimum_lbvh::Triangle> trianglesDevice(TYPED_BUFFER_DEVICE);
     TypedBuffer<TriangleAttrib> triangleAttribsDevice(TYPED_BUFFER_DEVICE);
     
-    auto loadFrame = [&archive, &trianglesDevice, &triangleAttribsDevice, &gpuBuilder, &onesweep, syncCamera, &camera](int frame)
+    auto loadFrame = [&archive, &trianglesDevice, &triangleAttribsDevice, &gpuBuilder, &onesweep, syncCamera, &camera, syncLight, &p_light](int frame)
     {
         std::vector<minimum_lbvh::Triangle> triangles;
         std::vector<TriangleAttrib> triangleAttribs;
@@ -156,6 +161,18 @@ int main()
         scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
             if (polymesh->visible() == false)
             {
+                return;
+            }
+            std::string name = polymesh->fullname();
+            if (name == "/light/pointlight")
+            {
+                if (syncLight)
+                {
+                    glm::vec3 p = polymesh->localToWorld()* glm::vec4(0, 0, 0, 1);
+                    p_light.x = p.x;
+                    p_light.y = p.y;
+                    p_light.z = p.z;
+                }
                 return;
             }
 
@@ -282,10 +299,6 @@ int main()
         //ManipulatePosition(camera, &P2, 0.1f);
         //DrawText(P2, "P2");
 
-        // static glm::vec3 p_light = { 0, 2, 1 };
-        //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
-        //static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
-        static glm::vec3 p_light = { -0.483765f, 1.69978f, 1.12299f };
         glm::vec3 prev_p_light = p_light;
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
