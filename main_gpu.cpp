@@ -119,71 +119,99 @@ int main()
     );
     tinyhiponesweep::OnesweepSort onesweep(device);
 
-    std::vector<minimum_lbvh::Triangle> triangles;
-    std::vector<TriangleAttrib> triangleAttribs;
+    Camera3D camera;
+    camera.origin = { 1, 1, -1 };
+    camera.lookat = { 0, 0, 0 };
+
 
     AbcArchive archive;
     std::string err;
     archive.open(GetDataPath("assets/scene.abc"), err);
-    std::shared_ptr<FScene> scene = archive.readFlat(0, err);
-    scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
-        if (polymesh->visible() == false)
-        {
-            return;
-        }
 
-        AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
-        Material material = Material::Diffuse;
-        if (auto matCol = details->columnAsString("material"))
-        {
-            const std::string& matString = details->columnAsString("material")->get(0);
-            if (matString == "mirror")
-            {
-                material = Material::Mirror;
-            }
-            else if (matString == "dielectric")
-            {
-                material = Material::Dielectric;
-            }
-        }
-
-        ColumnView<int32_t> faceCounts(polymesh->faceCounts());
-        ColumnView<int32_t> indices(polymesh->faceIndices());
-        ColumnView<glm::vec3> positions(polymesh->positions());
-        ColumnView<glm::vec3> normals(polymesh->normals());
-
-        int indexBase = 0;
-        for (int i = 0; i < faceCounts.count(); i++)
-        {
-            int nVerts = faceCounts[i];
-            PR_ASSERT(nVerts == 3);
-            minimum_lbvh::Triangle tri;
-            TriangleAttrib attrib;
-            attrib.material = material;
-            for (int j = 0; j < nVerts; ++j)
-            {
-                glm::vec3 p = positions[indices[indexBase + j]];
-                tri.vs[j] = { p.x, p.y, p.z };
-
-                glm::vec3 ns = normals[indexBase + j];
-                attrib.shadingNormals[j] = { ns.x, ns.y, ns.z };
-            }
-
-            float3 e0 = tri.vs[1] - tri.vs[0];
-            float3 e1 = tri.vs[2] - tri.vs[1];
-            float3 e2 = tri.vs[0] - tri.vs[2];
-
-            triangles.push_back(tri);
-            triangleAttribs.push_back(attrib);
-            indexBase += nVerts;
-        }
-    });
-
+    bool syncCamera = true;
+    int frameNumber = 0;
     TypedBuffer<minimum_lbvh::Triangle> trianglesDevice(TYPED_BUFFER_DEVICE);
     TypedBuffer<TriangleAttrib> triangleAttribsDevice(TYPED_BUFFER_DEVICE);
-    trianglesDevice << triangles;
-    triangleAttribsDevice << triangleAttribs;
-    gpuBuilder.build(trianglesDevice.data(), trianglesDevice.size(), 0, onesweep, 0 /*stream*/);
+    
+    auto loadFrame = [&archive, &trianglesDevice, &triangleAttribsDevice, &gpuBuilder, &onesweep, syncCamera, &camera](int frame)
+    {
+        std::vector<minimum_lbvh::Triangle> triangles;
+        std::vector<TriangleAttrib> triangleAttribs;
+
+        std::string err;
+        std::shared_ptr<FScene> scene = archive.readFlat(frame, err);
+
+        scene->visitCamera([&](std::shared_ptr<const pr::FCameraEntity> cameraEntity) {
+            if (!cameraEntity->visible())
+            {
+                return;
+            } 
+            if (syncCamera == false)
+            {
+                return;
+            }
+            camera = cameraFromEntity(cameraEntity.get());
+        });
+
+        scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
+            if (polymesh->visible() == false)
+            {
+                return;
+            }
+
+            AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
+            Material material = Material::Diffuse;
+            if (auto matCol = details->columnAsString("material"))
+            {
+                const std::string& matString = details->columnAsString("material")->get(0);
+                if (matString == "mirror")
+                {
+                    material = Material::Mirror;
+                }
+                else if (matString == "dielectric")
+                {
+                    material = Material::Dielectric;
+                }
+            }
+
+            ColumnView<int32_t> faceCounts(polymesh->faceCounts());
+            ColumnView<int32_t> indices(polymesh->faceIndices());
+            ColumnView<glm::vec3> positions(polymesh->positions());
+            ColumnView<glm::vec3> normals(polymesh->normals());
+
+            int indexBase = 0;
+            for (int i = 0; i < faceCounts.count(); i++)
+            {
+                int nVerts = faceCounts[i];
+                PR_ASSERT(nVerts == 3);
+                minimum_lbvh::Triangle tri;
+                TriangleAttrib attrib;
+                attrib.material = material;
+                for (int j = 0; j < nVerts; ++j)
+                {
+                    glm::vec3 p = positions[indices[indexBase + j]];
+                    tri.vs[j] = { p.x, p.y, p.z };
+
+                    glm::vec3 ns = normals[indexBase + j];
+                    attrib.shadingNormals[j] = { ns.x, ns.y, ns.z };
+                }
+
+                float3 e0 = tri.vs[1] - tri.vs[0];
+                float3 e1 = tri.vs[2] - tri.vs[1];
+                float3 e2 = tri.vs[0] - tri.vs[2];
+
+                triangles.push_back(tri);
+                triangleAttribs.push_back(attrib);
+                indexBase += nVerts;
+            }
+        });
+
+        trianglesDevice << triangles;
+        triangleAttribsDevice << triangleAttribs;
+        gpuBuilder.build(trianglesDevice.data(), trianglesDevice.size(), 0, onesweep, 0 /*stream*/);
+    };
+
+    loadFrame(0);
 
     TypedBuffer<FirstDiffuse> firstDiffuses(TYPED_BUFFER_DEVICE);
 
@@ -202,11 +230,7 @@ int main()
 
     ITexture* texture = CreateTexture();
 
-    Camera3D camera;
-    camera.origin = { 1, 1, -1 };
-    camera.lookat = { 0, 0, 0 };
-
-    float lightIntencity = 1.0f;
+    float lightIntencity = 5.0f;
 
     int iteration = 0;
 
@@ -261,7 +285,7 @@ int main()
         // static glm::vec3 p_light = { 0, 2, 1 };
         //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
         //static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
-        static glm::vec3 p_light = { -0.0703948f, 1.69978f, -1.63343f };
+        static glm::vec3 p_light = { -0.483765f, 1.69978f, 1.12299f };
         glm::vec3 prev_p_light = p_light;
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
@@ -288,6 +312,7 @@ int main()
         CauchyDispersion cauchy = BAF10_optical_glass();
         //CauchyDispersion cauchy = diamond();
         // CauchyDispersion cauchy(1.6f);
+        //CauchyDispersion cauchy(1.37112f, 57481.9887f);
 
         static float minThroughput = 0.05f;
 
@@ -394,10 +419,10 @@ int main()
             printf("%s %f\n", solveSpecular, sw.getElapsedMs());
         };
 
-        //solveSpecular(1, { Event::T });
+        solveSpecular(1, { Event::T });
 
         // a bit of sus...
-        //solveSpecular(1, { Event::R });
+        solveSpecular(1, { Event::R });
         solveSpecular(2, { Event::T, Event::T });
         //solveSpecular(3, { Event::T,Event::R, Event::T });
         //solveSpecular(4, { Event::T, Event::R, Event::R, Event::T });
@@ -449,10 +474,18 @@ int main()
         {
             clearAccumulation();
         }
-        if (ImGui::SliderFloat("lightIntencity", &lightIntencity, 0, 2))
+        if (ImGui::SliderFloat("lightIntencity", &lightIntencity, 0, 10))
         {
             clearAccumulation();
         }
+
+        if (ImGui::InputInt("frameNumber", &frameNumber))
+        {
+            loadFrame(frameNumber);
+            clearAccumulation();
+        }
+
+        ImGui::Checkbox("syncCamera", &syncCamera);
         
         ImGui::End();
 
