@@ -12,7 +12,7 @@ __device__ uint32_t packRGBA( float4 color )
 {
     int4 i4 = make_int4(color * 255.0f + make_float4(0.5f));
     i4 = clamp(i4, 0, 255);
-    return (i4.z << 16) | (i4.y << 8) | i4.x;
+    return 0xFF000000 | (i4.z << 16) | (i4.y << 8) | i4.x;
 }
 
 extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles )

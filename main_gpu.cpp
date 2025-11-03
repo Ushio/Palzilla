@@ -8,6 +8,60 @@
 #include "Orochi/Orochi.h"
 #include "pk.h"
 
+#if 1
+// -- final render --
+int main()
+{
+    using namespace pr;
+    SetDataDir(ExecutableDir());
+
+    if (oroInitialize((oroApi)(ORO_API_HIP | ORO_API_CUDA), 0))
+    {
+        printf("failed to init..\n");
+        return 0;
+    }
+
+    int DEVICE_INDEX = 2;
+    oroInit(0);
+    oroDevice device;
+    oroDeviceGet(&device, DEVICE_INDEX);
+    oroCtx ctx;
+    oroCtxCreate(&ctx, 0, device);
+    oroCtxSetCurrent(ctx);
+
+    oroDeviceProp props;
+    oroGetDeviceProperties(&props, device);
+
+    bool isNvidia = oroGetCurAPI(0) & ORO_API_CUDADRIVER;
+
+    printf("Device: %s\n", props.name);
+    printf("Cuda: %s\n", isNvidia ? "Yes" : "No");
+
+    PKRenderer pkRenderer;
+    pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str());
+    pkRenderer.allocate(1920, 1080);
+
+    for (int i = 0; i < pkRenderer.frameCount(); i++)
+    {
+        pkRenderer.loadFrame(i);
+        pkRenderer.clear();
+
+        for (int j = 0; j < 32; j++)
+        {
+            pkRenderer.step();
+        }
+
+        static Image2DRGBA8 image;
+        pkRenderer.resolve(&image);
+
+        char outputFile[128];
+        sprintf(outputFile, "%03d.png", i);
+
+        image.saveAsPng(outputFile);
+    }
+}
+#else
+// --interactive mode --
 int main()
 {
     using namespace pr;
@@ -149,3 +203,5 @@ int main()
     }
     return 0;
 }
+
+#endif
