@@ -3,3 +3,6 @@ bin/*.dll
 bin/*.exe
 bin/*.ilk
 bin/*.pdb
+bin/kernels/*.cu
+bin/kernels/*.h
+bin/kernels/*.png
