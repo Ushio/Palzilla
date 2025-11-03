@@ -118,7 +118,7 @@ int main()
     pkRenderer.m_camera.origin = { 1, 1, -1 };
     pkRenderer.m_camera.lookat = { 0, 0, 0 };
 
-    pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str());
+    pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str(), GetDataPath("../").c_str());
     pkRenderer.loadFrame(frameNumber);
 
     while (pr::NextFrame() == false) {
