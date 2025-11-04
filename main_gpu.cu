@@ -43,7 +43,7 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
 }
 
 
-extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration)
+extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -188,6 +188,8 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
         //L += reflectance * lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
         float contrib = lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
 
+        contrib = fminf(contrib, radianceClamp); // reason of variance. need to think
+
         float3 xyz = {
             CIE_2015_10deg::cmf_x(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
             CIE_2015_10deg::cmf_y(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
@@ -317,8 +319,7 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
         return;
     }
 
-    int contiguousFails = 0;
-    for (int j = 0; ; j++)
+    for (int j = 0; j < 8 ; j++)
     {
         float2 params = {};
         sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, iteration, iTri, 789);
@@ -422,19 +423,6 @@ __device__ void photonTrace(const NodeIndex* rootNode, const InternalNode* inter
             //    int index = atomicAdd(debugPointCount, 1);
             //    debugPoints[index] = p_final;
             //}
-        }
-
-        if (__any(success))
-        {
-            contiguousFails = 0;
-        }
-        else
-        {
-            contiguousFails++;
-        }
-        if (2 <= contiguousFails)
-        {
-            break;
         }
     }
 }

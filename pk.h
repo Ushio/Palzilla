@@ -1189,7 +1189,7 @@ public:
         using namespace pr;
 
         DeviceStopwatch sw(0);
-        sw.start();
+        //sw.start();
 
         CauchyDispersion cauchy = BAF10_optical_glass();
 
@@ -1208,6 +1208,7 @@ public:
             .value(m_triangleAttribsDevice.data())
             .value(to(m_p_light))
             .value(m_lightIntencity)
+            .value(m_radianceClamp)
             .value(cauchy)
             .ptr(&m_floorTex)
             .value(m_iteration),
@@ -1216,14 +1217,14 @@ public:
             0
         );
 
-        sw.stop();
-        printf("solvePrimary %f\n", sw.getElapsedMs());
+        //sw.stop();
+        //printf("solvePrimary %f\n", sw.getElapsedMs());
 
         auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
             oroMemsetD32(m_debugPointCount.data(), 0, 1);
             m_pathCache.clear();
 
-            sw.start();
+            //sw.start();
 
             char photonTrace[128];
             char solveSpecular[128];
@@ -1250,10 +1251,10 @@ public:
                 0
             );
 
-            sw.stop();
-            printf("%s %f\n", photonTrace, sw.getElapsedMs());
+            //sw.stop();
+            //printf("%s %f\n", photonTrace, sw.getElapsedMs());
 
-            printf(" occ %f\n", m_pathCache.occupancy());
+            //printf(" occ %f\n", m_pathCache.occupancy());
 
             // debug view
             if (0)
@@ -1268,7 +1269,7 @@ public:
                 }
             }
 
-            sw.start();
+            //sw.start();
 
             m_shader->launch(solveSpecular,
                 ShaderArgument()
@@ -1290,8 +1291,8 @@ public:
                 0
             );
 
-            sw.stop();
-            printf("%s %f\n", solveSpecular, sw.getElapsedMs());
+            //sw.stop();
+            //printf("%s %f\n", solveSpecular, sw.getElapsedMs());
         };
 
         solveSpecular(1, { Event::T });
@@ -1348,6 +1349,7 @@ public:
     glm::vec3 m_p_light = { -0.804876, 0.121239, -1.58616 };
     float m_lightIntencity = 5.0f;
     float m_minThroughput = 0.05f;
+    float m_radianceClamp = 5.0f;
     pr::Camera3D m_camera;
 
     bool m_loadCamera = true;

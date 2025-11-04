@@ -8,7 +8,7 @@
 #include "Orochi/Orochi.h"
 #include "pk.h"
 
-#if 1
+#if 0
 // -- final render --
 int main()
 {
@@ -27,7 +27,7 @@ int main()
         return 0;
     }
 
-    int DEVICE_INDEX = 0;
+    int DEVICE_INDEX = 2;
     oroInit(0);
     oroDevice device;
     oroDeviceGet(&device, DEVICE_INDEX);
@@ -110,7 +110,7 @@ int main()
     ITexture* texture = CreateTexture();
 
     bool syncLight = true;
-    int frameNumber = 50;
+    int frameNumber = 230;
 
     PKRenderer pkRenderer;
     
@@ -197,6 +197,10 @@ int main()
             pkRenderer.clear();
         }
         if (ImGui::SliderFloat("lightIntencity", &pkRenderer.m_lightIntencity, 0, 10))
+        {
+            pkRenderer.clear();
+        }
+        if (ImGui::SliderFloat("radianceClamp", &pkRenderer.m_radianceClamp, 0, 50))
         {
             pkRenderer.clear();
         }
