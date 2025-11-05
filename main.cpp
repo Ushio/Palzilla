@@ -1518,7 +1518,7 @@ int main() {
 
         // Rendering
 #if 1
-        float3 light_intencity = { 1.0f, 1.0f, 1.0f };
+        static float light_intencity = 5.0f;
         //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
         //static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
         static glm::vec3 p_light = light_from_scene;
@@ -1572,7 +1572,7 @@ int main() {
             //}
             //DrawPoint(to(tri.vs[0]), { 255, 0, 0 }, 2);
 
-            for (int j = 0; j < 256 ; j++)
+            for (int j = 0; j < 32 ; j++)
             {
                 float2 params = {};
                 sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j, 123, 456, 789);
@@ -1634,7 +1634,7 @@ int main() {
                     parameters[d * 2 + 1] = hit.uv.y;
 
                     float2 random;
-                    sobol::shuffled_scrambled_sobol_2d(&random.x, &random.y, j, d, iTri, 0);
+                    sobol::shuffled_scrambled_sobol_2d(&random.x, &random.y, j, d, iTri, debug_index);
 
                     float reflectance = fresnel_exact_norm_free(wi, ns, eta);
 
@@ -1802,7 +1802,7 @@ int main() {
 
                 // glm::vec3 color = viridis((float)numberOfNewton / 128);
 
-                float3 color = clamp(L, 0.0f, 100.0f);
+                float3 color = clamp(L, 0.0f, 1.0f);
                 image(i, j) = { 
                     255 * powf(color.x, 1.0f / 2.2f), 
                     255 * powf(color.y, 1.0f / 2.2f), 
@@ -1845,8 +1845,8 @@ int main() {
         //ImGui::SliderFloat("initials1", &initials[1], 0, 1);
         //ImGui::SliderFloat("initials2", &initials[2], 0, 1);
         //ImGui::SliderFloat("initials3", &initials[3], 0, 1);
+        ImGui::SliderFloat("light_intencity", &light_intencity, 0, 5);
         
-
         //ImGui::InputFloat("admissibleT", &admissibleT, 0.01f);
 
         //ImGui::InputInt("terminationCount", &terminationCount);
