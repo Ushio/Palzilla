@@ -55,7 +55,165 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
         }
     }
 }
+extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, float eta_min, float eta_max, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)
+{
+    int iTri = blockIdx.x;
+    if (attribs[iTri].material == Material::Diffuse)
+    {
+        return;
+    }
 
+    minimum_lbvh::Triangle tri = triangles[iTri];
+
+    // Skip backface
+    float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
+    float3 ns = attribs[iTri].shadingNormals[0];
+    ng *= dot(ng, ns);
+    if (dot(ng, p_light - tri.vs[0]) < 0.0f)
+    {
+        return;
+    }
+
+    enum {
+        K = PHOTON_TRACE_MAX_DEPTH
+    };
+
+    for (int j = 0; j < 8; j++)
+    {
+        float2 params = {};
+        sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, iteration, iTri, 789);
+        params = square2triangle(params);
+
+        float2 eta_random;
+        sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, j * blockDim.x + threadIdx.x, iteration, iTri, 178);
+        float eta = lerp(eta_min, eta_max, eta_random.x);
+
+        float3 e0 = tri.vs[1] - tri.vs[0];
+        float3 e1 = tri.vs[2] - tri.vs[0];
+        float3 p = tri.vs[0] + e0 * params.x + e1 * params.y;
+
+        float3 ro = p_light;
+        float3 rd = p - p_light;
+
+        EventDescriptor eDescriptor;
+        bool admissiblePath = false;
+        int triIndices[K];
+        float parameters[K * 2];
+        float3 p_final;
+        float throughtput = 1.0f;
+        for (int d = 0; d < K + 1; d++)
+        {
+            minimum_lbvh::Hit hit;
+            minimum_lbvh::intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd));
+            if (hit.t == MINIMUM_LBVH_FLT_MAX)
+            {
+                break;
+            }
+            TriangleAttrib attrib = attribs[hit.triangleIndex];
+            Material m = attrib.material;
+            float3 p_hit = ro + rd * hit.t;
+
+            float3 ns =
+                attrib.shadingNormals[0] +
+                (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
+                (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
+            float3 ng = dot(ns, hit.ng) < 0.0f ? -hit.ng : hit.ng; // aligned
+
+            if (m == Material::Diffuse)
+            {
+                if (d == 0)
+                {
+                    break;
+                }
+
+                admissiblePath = true;
+                p_final = p_hit;
+                break;
+            }
+            if (d == K) // finish
+            {
+                break;
+            }
+
+            float3 wi = -rd;
+            triIndices[d] = hit.triangleIndex;
+            parameters[d * 2] = hit.uv.x;
+            parameters[d * 2 + 1] = hit.uv.y;
+
+            float2 random;
+            sobol::shuffled_scrambled_sobol_2d(&random.x, &random.y, j * blockDim.x + threadIdx.x, d, iTri, iteration);
+
+            float reflectance = fresnel_exact_norm_free(wi, ns, eta);
+
+            Event e;
+            if (m == Material::Mirror)
+            {
+                e = Event::R;
+            }
+            else if (m == Material::Dielectric)
+            {
+                if (random.x < reflectance)
+                {
+                    e = Event::R;
+                }
+                else
+                {
+                    e = Event::T;
+                }
+            }
+
+            eDescriptor.push_back(e);
+
+            if (e == Event::R)
+            {
+                float3 wo = reflection(wi, ns);
+
+                if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
+                {
+                    float3 ng_norm = normalize(ng);
+                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
+                    rd = wo;
+
+                    if (m == Material::Dielectric)
+                    {
+                        throughtput *= reflectance;
+                    }
+                    continue;
+                }
+            }
+            else if (e == Event::T)
+            {
+                float3 wo;
+
+                if (refraction_norm_free(&wo, wi, ns, eta) == false)
+                {
+                    break;
+                }
+
+                if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
+                {
+                    float3 ng_norm = normalize(ng);
+                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
+                    rd = wo;
+
+                    throughtput *= 1.0f - reflectance;
+                    continue;
+                }
+            }
+            break;
+        }
+        if (admissiblePath && minThroughput < throughtput)
+        {
+            bool success = pathCache.store(p_final, triIndices, parameters, eDescriptor);
+
+            //if (success)
+            //{
+            //    int index = atomicAdd(debugPointCount, 1);
+            //    debugPoints[index] = p_final;
+            //}
+        }
+    }
+}
 
 extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration, NodeIndex *stackBuffer)
 {
@@ -345,166 +503,6 @@ DECL_SOLVE_SPECULAR_PATH(1);
 DECL_SOLVE_SPECULAR_PATH(2);
 DECL_SOLVE_SPECULAR_PATH(3);
 DECL_SOLVE_SPECULAR_PATH(4);
-
-extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, float eta_min, float eta_max, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount )
-{
-    int iTri = blockIdx.x;
-    if (attribs[iTri].material == Material::Diffuse)
-    {
-        return;
-    }
-
-    minimum_lbvh::Triangle tri = triangles[iTri];
-
-    // Skip backface
-    float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
-    float3 ns = attribs[iTri].shadingNormals[0];
-    ng *= dot(ng, ns);
-    if (dot(ng, p_light - tri.vs[0]) < 0.0f)
-    {
-        return;
-    }
-
-    enum {
-        K = PHOTON_TRACE_MAX_DEPTH
-    };
-
-    for (int j = 0; j < 8; j++)
-    {
-        float2 params = {};
-        sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, iteration, iTri, 789);
-        params = square2triangle(params);
-
-        float2 eta_random;
-        sobol::shuffled_scrambled_sobol_2d(&eta_random.x, &eta_random.y, j * blockDim.x + threadIdx.x, iteration, iTri, 178);
-        float eta = lerp(eta_min, eta_max, eta_random.x);
-
-        float3 e0 = tri.vs[1] - tri.vs[0];
-        float3 e1 = tri.vs[2] - tri.vs[0];
-        float3 p = tri.vs[0] + e0 * params.x + e1 * params.y;
-
-        float3 ro = p_light;
-        float3 rd = p - p_light;
-
-        EventDescriptor eDescriptor;
-        bool admissiblePath = false;
-        int triIndices[K];
-        float parameters[K * 2];
-        float3 p_final;
-        float throughtput = 1.0f;
-        for (int d = 0; d < K + 1; d++)
-        {
-            minimum_lbvh::Hit hit;
-            minimum_lbvh::intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd));
-            if (hit.t == MINIMUM_LBVH_FLT_MAX)
-            {
-                break;
-            }
-            TriangleAttrib attrib = attribs[hit.triangleIndex];
-            Material m = attrib.material;
-            float3 p_hit = ro + rd * hit.t;
-
-            float3 ns =
-                attrib.shadingNormals[0] +
-                (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
-                (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
-            float3 ng = dot(ns, hit.ng) < 0.0f ? -hit.ng : hit.ng; // aligned
-
-            if (m == Material::Diffuse)
-            {
-                if (d == 0)
-                {
-                    break;
-                }
-
-                admissiblePath = true;
-                p_final = p_hit;
-                break;
-            }
-            if (d == K) // finish
-            {
-                break;
-            }
-
-            float3 wi = -rd;
-            triIndices[d] = hit.triangleIndex;
-            parameters[d * 2] = hit.uv.x;
-            parameters[d * 2 + 1] = hit.uv.y;
-
-            float2 random;
-            sobol::shuffled_scrambled_sobol_2d(&random.x, &random.y, j * blockDim.x + threadIdx.x, d, iTri, iteration);
-
-            float reflectance = fresnel_exact_norm_free(wi, ns, eta);
-
-            Event e;
-            if (m == Material::Mirror)
-            {
-                e = Event::R;
-            }
-            else if (m == Material::Dielectric)
-            {
-                if (random.x < reflectance)
-                {
-                    e = Event::R;
-                }
-                else
-                {
-                    e = Event::T;
-                }
-            }
-
-            eDescriptor.push_back(e);
-
-            if (e == Event::R)
-            {
-                float3 wo = reflection(wi, ns);
-
-                if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
-                {
-                    float3 ng_norm = normalize(ng);
-                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
-                    rd = wo;
-
-                    if (m == Material::Dielectric)
-                    {
-                        throughtput *= reflectance;
-                    }
-                    continue;
-                }
-            }
-            else if (e == Event::T)
-            {
-                float3 wo;
-
-                if (refraction_norm_free(&wo, wi, ns, eta) == false)
-                {
-                    break;
-                }
-
-                if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
-                {
-                    float3 ng_norm = normalize(ng);
-                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
-                    rd = wo;
-
-                    throughtput *= 1.0f - reflectance;
-                    continue;
-                }
-            }
-            break;
-        }
-        if (admissiblePath && minThroughput < throughtput)
-        {
-            bool success = pathCache.store(p_final, triIndices, parameters, eDescriptor);
-
-            //if (success)
-            //{
-            //    int index = atomicAdd(debugPointCount, 1);
-            //    debugPoints[index] = p_final;
-            //}
-        }
-    }
-}
 
 extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
 {
