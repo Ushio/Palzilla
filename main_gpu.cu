@@ -55,8 +55,10 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
         }
     }
 }
-extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, float eta_min, float eta_max, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount)
+extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, float eta_min, float eta_max, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount, NodeIndex* stackBuffer)
 {
+    StackBufferWarp stackBufferWarp(stackBuffer);
+
     int iTri = blockIdx.x;
     if (attribs[iTri].material == Material::Diffuse)
     {
@@ -104,7 +106,7 @@ extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* ro
         for (int d = 0; d < K + 1; d++)
         {
             minimum_lbvh::Hit hit;
-            minimum_lbvh::intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd));
+            minimum_lbvh::intersect_stackfull(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd), stackBufferWarp.stack());
             if (hit.t == MINIMUM_LBVH_FLT_MAX)
             {
                 break;
@@ -227,8 +229,6 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
         return;
     }
 
-    NodeIndex* stack = stackBufferWarp.stack();
-
     int pixel = xi + yi * imageSize.x;
 
     int dimLevel = 0;
@@ -249,7 +249,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     for (int d = 0; d < 32; d++)
     {
         minimum_lbvh::Hit hit;
-        minimum_lbvh::intersect_stackfull(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd), stack);
+        minimum_lbvh::intersect_stackfull(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd), stackBufferWarp.stack());
         if (hit.t == MINIMUM_LBVH_FLT_MAX)
         {
             hit_last = hit;

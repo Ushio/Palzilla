@@ -1307,9 +1307,9 @@ public:
     {
         using namespace pr;
 
-        //printf("---\n");
-        //DeviceStopwatch sw(0);
-        //sw.start();
+        printf("---\n");
+        DeviceStopwatch sw(0);
+        sw.start();
 
         CauchyDispersion cauchy = BAF10_optical_glass();
 
@@ -1338,13 +1338,13 @@ public:
             0
         );
 
-        //sw.stop();
-        //printf("solvePrimary %f\n", sw.getElapsedMs());
+        sw.stop();
+        printf("solvePrimary %f\n", sw.getElapsedMs());
 
         m_pathCache.clear();
         oroMemsetD32(m_debugPointCount.data(), 0, 1);
 
-        //sw.start();
+        sw.start();
 
         m_shader->launch("photonTrace",
             ShaderArgument()
@@ -1359,7 +1359,8 @@ public:
             .ptr(&m_pathCache)
             .value(m_minThroughput)
             .value(m_debugPoints.data())
-            .value(m_debugPointCount.data()),
+            .value(m_debugPointCount.data())
+            .value(m_stackBufferAllocator.data()),
             m_gpuBuilder->m_nTriangles, 1, 1,
             32, 1, 1,
             0
@@ -1367,8 +1368,8 @@ public:
 
         // printf(" occ %f\n", m_pathCache.occupancy());
 
-        //sw.stop();
-        //printf("photonTrace %f\n", sw.getElapsedMs());
+        sw.stop();
+        printf("photonTrace %f\n", sw.getElapsedMs());
 
         if (0)
         {
