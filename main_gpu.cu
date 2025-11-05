@@ -43,15 +43,19 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
 }
 
 
-extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration)
+extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration, NodeIndex *stackBuffer)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
+
+    StackBufferWarp stackBufferWarp(stackBuffer);
 
     if (imageSize.x <= xi || imageSize.y <= yi)
     {
         return;
     }
+
+    NodeIndex* stack = stackBufferWarp.stack();
 
     int pixel = xi + yi * imageSize.x;
 
@@ -73,7 +77,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     for (int d = 0; d < 32; d++)
     {
         minimum_lbvh::Hit hit;
-        minimum_lbvh::intersect_stackfree(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd));
+        minimum_lbvh::intersect_stackfull(&hit, internals, triangles, *rootNode, ro, rd, minimum_lbvh::invRd(rd), stack);
         if (hit.t == MINIMUM_LBVH_FLT_MAX)
         {
             hit_last = hit;

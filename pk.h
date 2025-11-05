@@ -996,6 +996,65 @@ public:
     uint32_t m_height;
 };
 
+
+#define STACK_BUFFER_MAX_WARPS ( 256 * 256 )
+#define STACK_BUFFER_MAX_ELEMENT 128
+
+#if !defined(PK_KERNELCC)
+class StackBufferAllocator
+{
+public:
+    StackBufferAllocator()
+    {
+        m_stackBuffer.allocate(STACK_BUFFER_MAX_WARPS * 32 * STACK_BUFFER_MAX_ELEMENT);
+        oroMemsetD32(m_stackBuffer.data(), 0, m_stackBuffer.size());
+    }
+    minimum_lbvh::NodeIndex* data() { return m_stackBuffer.data(); }
+private:
+    TypedBuffer<minimum_lbvh::NodeIndex> m_stackBuffer = TypedBuffer<minimum_lbvh::NodeIndex>(TYPED_BUFFER_DEVICE);
+};
+#else
+class StackBufferWarp
+{
+public:
+    PK_DEVICE StackBufferWarp(minimum_lbvh::NodeIndex *stackBuffer):m_stackBuffer(stackBuffer)
+    {
+        int linearBlockDim = blockDim.x * blockDim.y * blockDim.z;
+        int linearThreadIdx = threadIdx.x + blockDim.x * threadIdx.y + blockDim.x * blockDim.y * threadIdx.z;
+        int linearBlockIdx = blockIdx.x + gridDim.x * blockIdx.y + gridDim.x * gridDim.y * blockIdx.z;
+        int warpsInBlock = linearBlockDim / 32;
+        int laneIdx = linearThreadIdx % 32;
+        int warpIdx = linearThreadIdx / 32;
+        int globalWarpIdx = linearBlockIdx * warpsInBlock + warpIdx;
+
+        uint32_t index = (globalWarpIdx % STACK_BUFFER_MAX_WARPS) * 32 * STACK_BUFFER_MAX_ELEMENT;
+        bool success = false;
+        while(success == false)
+        {
+            if (laneIdx == 0)
+            {
+                success = atomicCAS((uint32_t*)&m_stackBuffer[index], 0 /*compare*/, 32) == 0;
+            }
+            success = __any(success);
+        }
+        m_baseIndex = index;
+    }
+    PK_DEVICE ~StackBufferWarp()
+    {
+        atomicDec((uint32_t*)&m_stackBuffer[m_baseIndex], 0xFFFFFFFF);
+    }
+    PK_DEVICE minimum_lbvh::NodeIndex* stack()
+    {
+        int linearThreadIdx = threadIdx.x + blockDim.x * threadIdx.y + blockDim.x * blockDim.y * threadIdx.z;
+        int laneIdx = linearThreadIdx % 32;
+        return &m_stackBuffer[m_baseIndex + laneIdx * STACK_BUFFER_MAX_ELEMENT + 1];
+    }
+    minimum_lbvh::NodeIndex* m_stackBuffer;
+    uint32_t m_baseIndex;
+};
+#endif
+
+
 #if !defined(PK_KERNELCC)
 
 inline glm::vec3 to(float3 p)
@@ -1188,7 +1247,8 @@ public:
     {
         using namespace pr;
 
-        DeviceStopwatch sw(0);
+        //printf("---\n");
+        //DeviceStopwatch sw(0);
         //sw.start();
 
         CauchyDispersion cauchy = BAF10_optical_glass();
@@ -1211,7 +1271,8 @@ public:
             .value(m_radianceClamp)
             .value(cauchy)
             .ptr(&m_floorTex)
-            .value(m_iteration),
+            .value(m_iteration)
+            .value(m_stackBufferAllocator.data()),
             div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
             16, 16, 1,
             0
@@ -1298,6 +1359,7 @@ public:
         solveSpecular(1, { Event::T });
         solveSpecular(1, { Event::R });
         solveSpecular(2, { Event::T, Event::T });
+        solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
 
         m_iteration++;
     }
@@ -1339,9 +1401,9 @@ public:
 
     Texture8RGBX m_floorTex;
 
-
     TypedBuffer<float3> m_debugPoints = TypedBuffer<float3>(TYPED_BUFFER_DEVICE);
     TypedBuffer<int> m_debugPointCount = TypedBuffer<int>(TYPED_BUFFER_DEVICE);
+    StackBufferAllocator m_stackBufferAllocator;
 
     int m_imageWidth = 0;
     int m_imageHeight = 0;
