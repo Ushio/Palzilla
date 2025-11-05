@@ -436,9 +436,6 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
     float3 n = firstDiffuse.ng;
     float3 R = firstDiffuse.R;
 
-    float3 toLight = p_light - p;
-    float d2 = dot(toLight, toLight);
-
     const PathCache::TrianglePath& thePath = pathCache->m_pathes[specularPath.cacheIndex];
 
     minimum_lbvh::Triangle tris[K];
@@ -462,7 +459,6 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
 
     float eta = cauchy(lambda);
-    // float eta = cauchy(500.0f);
     bool converged = solveConstraints<K>(parameters, p_light, p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
 
     if (converged)
@@ -473,7 +469,7 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
 
         if (0.0f < throughput)
         {
-            float dAdwValue = dAdw(p_light, getVertex(0, tris, parameters) - p_light, p, tris, attribs, eDescriptor, K, eta);
+            float dAdwValue = dAdw(p_light, getVertex(0, tris, parameters) - p_light, p, tris, attribs, eDescriptor, eta);
             // L += throughput * R * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
 
             float contrib = throughput * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);

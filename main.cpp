@@ -35,7 +35,7 @@ inline void clamp_uv(float* u_inout, float* v_inout, minimum_lbvh::Triangle tri)
     }
     if (1.0f < u + v)
     {
-        float t = 1.0 / (u + v);
+        float t = 1.0f / (u + v);
         u *= t;
         v *= t;
     }
@@ -1794,7 +1794,7 @@ int main() {
 
                         if (0.0f < throughput)
                         {
-                            float dAdwValue = dAdw(to(p_light), getVertex(0, tris, parameters) - to(p_light), p, tris, attribs, eDescriptor, K, eta);
+                            float dAdwValue = dAdw(to(p_light), getVertex(0, tris, parameters) - to(p_light), p, tris, attribs, eDescriptor, eta);
                             L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
                         }
                     }

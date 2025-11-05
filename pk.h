@@ -86,7 +86,7 @@ PK_DEVICE inline bool occluded(
 
     minimum_lbvh::Hit hit;
     hit.t = 1.0f;
-    minimum_lbvh::intersect_stackfree(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
+    minimum_lbvh::intersect_escape_link(&hit, nodes, triangles, node, from_safe, rd, minimum_lbvh::invRd(rd), minimum_lbvh::RAY_QUERY_ANY);
     return hit.t < 1.0f;
 }
 
@@ -819,15 +819,9 @@ PK_DEVICE inline float contributableThroughput(float parameters[K * 2], float3 p
     return throughput;
 }
 
-PK_DEVICE inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, EventDescriptor eDescriptor, int nEvent, float eta )
+PK_DEVICE inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Triangle* tris, TriangleAttrib* attribs, EventDescriptor eDescriptor, float eta )
 {
     rd = normalize(rd);
-
-    auto intersect_p_ray_plane = [](saka::dval3 ro, saka::dval3 rd, saka::dval3 ng, saka::dval3 v0)
-    {
-        auto t = dot(v0 - ro, ng) / dot(ng, rd);
-        return ro + rd * t;
-    };
 
     float3 dAxis[2];
     for (int i = 0; i < 2; i++)
@@ -846,7 +840,7 @@ PK_DEVICE inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Tr
 
         bool inMedium = false;
 
-        for (int j = 0; j < nEvent; j++)
+        for (int j = 0; j < eDescriptor.size(); j++)
         {
             minimum_lbvh::Triangle tri = tris[j];
             TriangleAttrib attrib = attribs[j];
@@ -937,7 +931,7 @@ struct CauchyDispersion
 
 PK_DEVICE inline CauchyDispersion BAF10_optical_glass()
 {
-    return CauchyDispersion(1.64732f, 7907.16861);
+    return CauchyDispersion(1.64732f, 7907.16861f);
 }
 PK_DEVICE inline CauchyDispersion diamond()
 {
@@ -1307,9 +1301,9 @@ public:
     {
         using namespace pr;
 
-        printf("---\n");
-        DeviceStopwatch sw(0);
-        sw.start();
+        //printf("---\n");
+        //DeviceStopwatch sw(0);
+        //sw.start();
 
         CauchyDispersion cauchy = BAF10_optical_glass();
 
@@ -1338,13 +1332,13 @@ public:
             0
         );
 
-        sw.stop();
-        printf("solvePrimary %f\n", sw.getElapsedMs());
+        //sw.stop();
+        //printf("solvePrimary %f\n", sw.getElapsedMs());
 
         m_pathCache.clear();
         oroMemsetD32(m_debugPointCount.data(), 0, 1);
 
-        sw.start();
+        //sw.start();
 
         m_shader->launch("photonTrace",
             ShaderArgument()
@@ -1368,8 +1362,8 @@ public:
 
         // printf(" occ %f\n", m_pathCache.occupancy());
 
-        sw.stop();
-        printf("photonTrace %f\n", sw.getElapsedMs());
+        //sw.stop();
+        //printf("photonTrace %f\n", sw.getElapsedMs());
 
         if (0)
         {
