@@ -1575,7 +1575,7 @@ int main() {
             for (int j = 0; j < 32 ; j++)
             {
                 float2 params = {};
-                sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j, 123, 456, 789);
+                sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j, 123, 456, debug_index);
                 params = square2triangle(params);
 
                 float3 e0 = tri.vs[1] - tri.vs[0];
