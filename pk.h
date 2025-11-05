@@ -325,7 +325,7 @@ struct PathCache
     }
 
     template <class F>
-    PK_DEVICE void lookUp(float3 p, F f) const
+    PK_DEVICE void lookUp(float3 p, EventDescriptor e, F f) const
     {
         uint32_t hashOfP = spacial_hash(p, m_spatial_step);
         uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
@@ -337,6 +337,10 @@ struct PathCache
                 break; // no more cached
             }
             if (m_pathes[index].hashOfP != hashOfP)
+            {
+                continue;
+            }
+            if (m_pathes[index].eDescriptor.asU32() != e.asU32())
             {
                 continue;
             }

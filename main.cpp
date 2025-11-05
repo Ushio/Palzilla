@@ -160,7 +160,7 @@ int main() {
     AbcArchive archive;
     std::string err;
     archive.open(GetDataPath("assets/scene.abc"), err);
-    std::shared_ptr<FScene> scene = archive.readFlat(32, err);
+    std::shared_ptr<FScene> scene = archive.readFlat(50, err);
 
     int debug_index = 10;
 
@@ -170,6 +170,7 @@ int main() {
     // mirror 
     DeltaPolygonSoup deltaPolygonSoup;
 
+    glm::vec3 light_from_scene = {};
     scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
         if (polymesh->visible() == false)
         {
@@ -178,6 +179,7 @@ int main() {
         std::string name = polymesh->fullname();
         if (name == "/light/pointlight")
         {
+            light_from_scene = polymesh->localToWorld() * glm::vec4(0, 0, 0, 1);
             return;
         }
         AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
@@ -1124,7 +1126,7 @@ int main() {
 
 #endif 
 
-#if 1
+#if 0
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -1515,11 +1517,11 @@ int main() {
 #endif
 
         // Rendering
-        {
-#if 0
+#if 1
         float3 light_intencity = { 1.0f, 1.0f, 1.0f };
         //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
-        static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
+        //static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };
+        static glm::vec3 p_light = light_from_scene;
         ManipulatePosition(camera, &p_light, 0.3f);
         DrawText(p_light, "light");
 
@@ -1533,7 +1535,7 @@ int main() {
 
         Stopwatch sw;
 
-        const float spacial_step = 0.025f;
+        const float spacial_step = 0.01f;
 
         PathCache pathCache(TYPED_BUFFER_HOST);
         pathCache.init(spacial_step);
@@ -1548,7 +1550,7 @@ int main() {
             K = 2
         };
         // EventDescriptor eDescriptor = { Event::R };
-        EventDescriptor eDescriptor = { Event::T, Event::T };
+        // EventDescriptor eDescriptor = { Event::T, Event::T };
         // EventDescriptor eDescriptor = { Event::T, Event::T, Event::T, Event::T };
         //EventDescriptor eDescriptor = { Event::T, Event::R, Event::R, Event::T };
         //EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
@@ -1561,17 +1563,16 @@ int main() {
                 continue;
             }
 
-            float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
-            float3 ns = polygonSoup.triangleAttribs[iTri].shadingNormals[0];
-            ng *= dot(ng, ns);
-            if (dot(ng, to(p_light) - tri.vs[0]) < 0.0f )
-            {
-                continue;
-            }
+            //float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
+            //float3 ns = polygonSoup.triangleAttribs[iTri].shadingNormals[0];
+            //ng *= dot(ng, ns);
+            //if (dot(ng, to(p_light) - tri.vs[0]) < 0.0f )
+            //{
+            //    continue;
+            //}
             //DrawPoint(to(tri.vs[0]), { 255, 0, 0 }, 2);
 
-            int contiguousFails = 0;
-            for (int j = 0; ; j++)
+            for (int j = 0; j < 256 ; j++)
             {
                 float2 params = {};
                 sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j, 123, 456, 789);
@@ -1584,11 +1585,12 @@ int main() {
                 float3 ro = to(p_light);
                 float3 rd = p - to(p_light);
 
-                float throughtput = 1.0f;
+                EventDescriptor eDescriptor;
                 bool admissiblePath = false;
                 int triIndices[K];
                 float parameters[K * 2];
                 float3 p_final;
+                float throughtput = 1.0f;
                 for (int d = 0; d < K + 1; d++)
                 {
                     minimum_lbvh::Hit hit;
@@ -1606,24 +1608,56 @@ int main() {
                         (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
                         (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
                     float3 ng = dot(ns, hit.ng) < 0.0f ? -hit.ng : hit.ng; // aligned
+                    float3 wi = -rd;
 
-                    if ( d == K )
+                    if ( m == Material::Diffuse )
                     {
-                        if ( m == Material::Diffuse )
+                        if (d == 0)
                         {
-                            // store 
-                            admissiblePath = true;
-                            p_final = p_hit;
-                            //DrawPoint(to(p_hit), { 255, 0, 0 }, 2);
+                            break;
                         }
+                        // store 
+                        admissiblePath = true;
+                        p_final = p_hit;
+                        //DrawPoint(to(p_hit), { 255, 0, 0 }, 2);
                         break;
                     }
-                    float3 wi = -rd;
+                    if (d == K)
+                    {
+                        break;
+                    }
+
+                    assert(d < K);
+
                     triIndices[d] = hit.triangleIndex;
                     parameters[d * 2] = hit.uv.x;
                     parameters[d * 2 + 1] = hit.uv.y;
 
-                    if ( eDescriptor.get(d) == Event::R && (m == Material::Mirror || m == Material::Dielectric ))
+                    float2 random;
+                    sobol::shuffled_scrambled_sobol_2d(&random.x, &random.y, j, d, iTri, 0);
+
+                    float reflectance = fresnel_exact_norm_free(wi, ns, eta);
+
+                    Event e;
+                    if (m == Material::Mirror)
+                    {
+                        e = Event::R;
+                    }
+                    else if (m == Material::Dielectric)
+                    {
+                        if (random.x < reflectance)
+                        {
+                            e = Event::R;
+                        }
+                        else
+                        {
+                            e = Event::T;
+                        }
+                    }
+
+                    eDescriptor.push_back(e);
+
+                    if (e == Event::R)
                     {
                         
                         float3 wo = reflection(wi, ns);
@@ -1636,13 +1670,13 @@ int main() {
 
                             if (m == Material::Dielectric)
                             {
-                                throughtput *= fresnel_exact_norm_free(wi, ns, eta);
+                                throughtput *= reflectance;
                             }
 
                             continue;
                         }
                     }
-                    if (eDescriptor.get(d) == Event::T && m == Material::Dielectric )
+                    else if (e == Event::T)
                     {
                         float3 wo;
 
@@ -1657,7 +1691,7 @@ int main() {
                             ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
                             rd = wo;
 
-                            throughtput *= 1.0f - fresnel_exact_norm_free(wi, ns, eta);
+                            throughtput *= 1.0f - reflectance;
                             continue;
                         }
                     }
@@ -1669,26 +1703,12 @@ int main() {
                 {
                     if (admissibleT < throughtput)
                     {
-                        success = pathCache.store(p_final, triIndices, parameters, K);
+                        success = pathCache.store(p_final, triIndices, parameters, eDescriptor);
                         if (success)
                         {
                             // DrawPoint(to(p_final), { 255, 0, 0 }, 2);
                         }
                     }
-
-                }
-
-                if (success)
-                {
-                    contiguousFails = 0;
-                }
-                else
-                {
-                    contiguousFails++;
-                }
-                if (terminationCount < contiguousFails)
-                {
-                    break;
                 }
             }
         }
@@ -1748,54 +1768,8 @@ int main() {
 
                 int numberOfNewton = 0;
 
-                // refraction 2 levels
-                //EventDescriptor eDescriptor;
-                //eDescriptor.set(0, Event::T);
-                //eDescriptor.set(1, Event::T);
-
-                //enum {
-                //    K = 2
-                //};
-                //traverseAdmissibleNodes<K>(
-                //    eDescriptor,
-                //    eta,
-                //    to(p_light), p,
-                //    deltaPolygonSoup.builder.m_internals.data(),
-                //    deltaPolygonSoup.internalsNormalBound.data(),
-                //    deltaPolygonSoup.triangles.data(),
-                //    deltaPolygonSoup.triangleAttribs.data(),
-                //    deltaPolygonSoup.builder.m_rootNode,
-                //    [&](AdmissibleTriangles<K> admissibleTriangles) {
-                //        numberOfNewton++;
-
-                //        minimum_lbvh::Triangle tris[K];
-                //        TriangleAttrib attribs[K];
-                //        for (int k = 0; k < K ; k++)
-                //        {
-                //            int index = admissibleTriangles.indices[k];
-                //            tris[k] = deltaPolygonSoup.triangles[index];
-                //            attribs[k] = deltaPolygonSoup.triangleAttribs[index];
-                //        }
-
-                //        float parameters[4]; //todo init
-                //        bool converged = solveConstraints<K>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
-
-                //        if (converged)
-                //        {
-                //            bool throughput = contributableThroughput<K>(
-                //                parameters, to(p_light), p, tris, attribs, eDescriptor,
-                //                polygonSoup.builder.m_internals.data(), polygonSoup.triangles.data(), polygonSoup.builder.m_rootNode, eta);
-
-                //            if (0.0f < throughput)
-                //            {
-                //                float dAdwValue = dAdw(to(p_light), getVertex(0, tris, parameters) - to(p_light), p, tris, attribs, eDescriptor, K, eta);
-                //                L += throughput * reflectance * light_intencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
-                //            }
-                //        }
-
-                //});
-
-                pathCache.lookUp(p, [&](const int triIndices[], const float photon_parameters[]) {
+                EventDescriptor eDescriptor = { Event::T, Event::T };
+                pathCache.lookUp(p, eDescriptor, [&](const int triIndices[], const float photon_parameters[]) {
                     minimum_lbvh::Triangle tris[K];
                     TriangleAttrib attribs[K];
                     for (int k = 0; k < K; k++)
@@ -1828,12 +1802,11 @@ int main() {
 
                 // glm::vec3 color = viridis((float)numberOfNewton / 128);
 
-                float3 color = clamp(L, 0.0f, 1.0f);
+                float3 color = clamp(L, 0.0f, 100.0f);
                 image(i, j) = { 
                     255 * powf(color.x, 1.0f / 2.2f), 
                     255 * powf(color.y, 1.0f / 2.2f), 
                     255 * powf(color.z, 1.0f / 2.2f), 255};
-
             };
         }
         );
@@ -1857,7 +1830,6 @@ int main() {
 
         //pr::PrimEnd();
 #endif
-        }
         PopGraphicState();
         EndCamera();
 

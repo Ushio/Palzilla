@@ -247,7 +247,7 @@ __device__ void solveSpecular(float4* accumulators, const FirstDiffuse* firstDif
 
     float3 L = {};
 
-    pathCache->lookUp(p, [&](const int triIndices[], const float photon_parameters[]) {
+    pathCache->lookUp(p, eDescriptor, [&](const int triIndices[], const float photon_parameters[]) {
         minimum_lbvh::Triangle tris[K];
         TriangleAttrib attribs[K];
         for (int k = 0; k < K; k++)
