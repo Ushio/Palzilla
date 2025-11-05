@@ -33,6 +33,8 @@
 
 #define MIN_VERTEX_DIST 1.0e-5f
 
+//#define SHOW_VALID_CACHE 
+
 PK_DEVICE inline float rayOffsetScale(float3 p)
 {
     p = fabs(p);
@@ -1336,7 +1338,10 @@ public:
         //printf("solvePrimary %f\n", sw.getElapsedMs());
 
         m_pathCache.clear();
+
+#if defined(SHOW_VALID_CACHE)
         oroMemsetD32(m_debugPointCount.data(), 0, 1);
+#endif
 
         //sw.start();
 
@@ -1365,7 +1370,7 @@ public:
         //sw.stop();
         //printf("photonTrace %f\n", sw.getElapsedMs());
 
-        if (0)
+#if defined(SHOW_VALID_CACHE)
         {
             int nPoints = 0;
             oroMemcpyDtoH(&nPoints, m_debugPointCount.data(), sizeof(int));
@@ -1376,6 +1381,7 @@ public:
                 DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
             }
         }
+#endif
 
         auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
             char solveSpecularPath[128];

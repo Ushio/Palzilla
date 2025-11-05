@@ -208,11 +208,13 @@ extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* ro
         {
             bool success = pathCache.store(p_final, triIndices, parameters, eDescriptor);
 
-            //if (success)
-            //{
-            //    int index = atomicAdd(debugPointCount, 1);
-            //    debugPoints[index] = p_final;
-            //}
+#if defined(SHOW_VALID_CACHE)
+            if (success)
+            {
+                int index = atomicAdd(debugPointCount, 1);
+                debugPoints[index] = p_final;
+            }
+#endif
         }
     }
 }
