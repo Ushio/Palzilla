@@ -29,6 +29,8 @@
 #define NATIVE_LOGF(x) std::logf(x)
 #endif
 
+#define PHOTON_TRACE_MAX_DEPTH 4
+
 #define MIN_VERTEX_DIST 1.0e-5f
 
 PK_DEVICE inline float rayOffsetScale(float3 p)
@@ -95,18 +97,23 @@ enum class Event
 };
 struct EventDescriptor
 {
-    PK_DEVICE EventDescriptor() : m_events(0) {}
+    PK_DEVICE EventDescriptor() : m_events(0), m_size(0) {}
 
 #if !defined(PK_KERNELCC)
-    EventDescriptor(std::initializer_list<Event> events) : m_events(0)
+    EventDescriptor(std::initializer_list<Event> events) : m_events(0), m_size(0)
     {
-        int index = 0;
         for (Event e : events)
         {
-            this->set(index++, e);
+            push_back(e);
         }
     }
+    
 #endif
+    PK_DEVICE void push_back(Event e)
+    {
+        set(m_size, e);
+        m_size++;
+    }
 
     PK_DEVICE Event get(uint32_t index) const {
         bool setbit = m_events & (1u << index);
@@ -120,7 +127,14 @@ struct EventDescriptor
             m_events |= 1u << index;
         }
     }
-    uint32_t m_events;
+
+    PK_DEVICE int size() const { return m_size; }
+    PK_DEVICE uint32_t asU32() const {
+        return (m_size << 24) | m_events;
+    }
+
+    uint32_t m_events : 24;
+    uint32_t m_size : 8;
 };
 
 // ALow-DistortionMapBetweenTriangleandSquare
@@ -189,13 +203,14 @@ PK_DEVICE inline uint32_t spacial_hash(float3 p, float spacial_step) {
 struct PathCache
 {
     enum {
-        MAX_PATH_LENGTH = 10,
+        MAX_PATH_LENGTH = PHOTON_TRACE_MAX_DEPTH,
         CACHE_STORAGE_COUNT = 1u << 22
     };
 
     struct TrianglePath
     {
         uint32_t hashOfP;
+        EventDescriptor eDescriptor;
         int tris[MAX_PATH_LENGTH];
         float parameters[MAX_PATH_LENGTH * 2];
     };
@@ -249,10 +264,10 @@ struct PathCache
 #endif
 
     // return true when store was succeeded
-    PK_DEVICE bool store(float3 pos, int tris[], float* parameters, int K)
+    PK_DEVICE bool store(float3 pos, int tris[], float* parameters, EventDescriptor eDescriptor)
     {
-        uint32_t hashOfPath = 123;
-        for (int d = 0; d < K; d++)
+        uint32_t hashOfPath = eDescriptor.asU32();
+        for (int d = 0; d < eDescriptor.size(); d++)
         {
             hashOfPath = minimum_lbvh::hashPCG(hashOfPath + tris[d]);
         }
@@ -282,13 +297,14 @@ struct PathCache
                 {
                     m_hashsOfPath[index] = hashOfPath;
                     m_pathes[index].hashOfP = hashOfP;
-                    for (int d = 0; d < K; d++)
+                    m_pathes[index].eDescriptor = eDescriptor;
+                    for (int d = 0; d < eDescriptor.size(); d++)
                     {
                         m_pathes[index].tris[d] = tris[d];
                     }
                     if (parameters)
                     {
-                        for (int i = 0; i < K * 2; i++)
+                        for (int i = 0; i < eDescriptor.size() * 2; i++)
                         {
                             m_pathes[index].parameters[i] = parameters[i];
                         }
@@ -328,7 +344,7 @@ struct PathCache
         }
     }
     template <class F>
-    PK_DEVICE void lookUpIndex(float3 p, F f) const
+    PK_DEVICE void lookUpIndex(float3 p, EventDescriptor e, F f) const
     {
         uint32_t hashOfP = spacial_hash(p, m_spatial_step);
         uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
@@ -340,6 +356,10 @@ struct PathCache
                 break; // no more cached
             }
             if (m_pathes[index].hashOfP != hashOfP)
+            {
+                continue;
+            }
+            if (m_pathes[index].eDescriptor.asU32() != e.asU32())
             {
                 continue;
             }
@@ -1317,9 +1337,47 @@ public:
         //sw.stop();
         //printf("solvePrimary %f\n", sw.getElapsedMs());
 
+        m_pathCache.clear();
+
+        //sw.start();
+
+        m_shader->launch("photonTrace",
+            ShaderArgument()
+            .value(m_gpuBuilder->m_rootNode)
+            .value(m_gpuBuilder->m_internals)
+            .value(m_trianglesDevice.data())
+            .value(m_triangleAttribsDevice.data())
+            .value(to(m_p_light))
+            .value(cauchy(VISIBLE_SPECTRUM_MIN))
+            .value(cauchy(VISIBLE_SPECTRUM_MAX))
+            .value(m_iteration)
+            .ptr(&m_pathCache)
+            .value(m_minThroughput)
+            .value(m_debugPoints.data())
+            .value(m_debugPointCount.data()),
+            m_gpuBuilder->m_nTriangles, 1, 1,
+            32, 1, 1,
+            0
+        );
+
+        //sw.stop();
+        //printf("photonTrace %f\n", sw.getElapsedMs());
+
+        //if (1)
+        //{
+        //    int nPoints = 0;
+        //    oroMemcpyDtoH(&nPoints, m_debugPointCount.data(), sizeof(int));
+        //    std::vector<float3> points(nPoints);
+        //    oroMemcpyDtoH(points.data(), m_debugPoints.data(), sizeof(float3) * nPoints);
+        //    for (int i = 0; i < nPoints; i++)
+        //    {
+        //        DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
+        //    }
+        //}
+
         auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
             oroMemsetD32(m_debugPointCount.data(), 0, 1);
-            m_pathCache.clear();
+            //m_pathCache.clear();
 
             //sw.start();
 
@@ -1330,25 +1388,25 @@ public:
             sprintf(solveSpecular, "solveSpecular_K%d", K);
             sprintf(solveSpecularPath, "solveSpecularPath_K%d", K);
 
-            m_shader->launch(photonTrace,
-                ShaderArgument()
-                .value(m_gpuBuilder->m_rootNode)
-                .value(m_gpuBuilder->m_internals)
-                .value(m_trianglesDevice.data())
-                .value(m_triangleAttribsDevice.data())
-                .value(to(m_p_light))
-                .value(eDescriptor)
-                .value(cauchy(VISIBLE_SPECTRUM_MIN))
-                .value(cauchy(VISIBLE_SPECTRUM_MAX))
-                .value(m_iteration)
-                .ptr(&m_pathCache)
-                .value(m_minThroughput)
-                .value(m_debugPoints.data())
-                .value(m_debugPointCount.data()),
-                m_gpuBuilder->m_nTriangles, 1, 1,
-                32, 1, 1,
-                0
-            );
+            //m_shader->launch(photonTrace,
+            //    ShaderArgument()
+            //    .value(m_gpuBuilder->m_rootNode)
+            //    .value(m_gpuBuilder->m_internals)
+            //    .value(m_trianglesDevice.data())
+            //    .value(m_triangleAttribsDevice.data())
+            //    .value(to(m_p_light))
+            //    .value(eDescriptor)
+            //    .value(cauchy(VISIBLE_SPECTRUM_MIN))
+            //    .value(cauchy(VISIBLE_SPECTRUM_MAX))
+            //    .value(m_iteration)
+            //    .ptr(&m_pathCache)
+            //    .value(m_minThroughput)
+            //    .value(m_debugPoints.data())
+            //    .value(m_debugPointCount.data()),
+            //    m_gpuBuilder->m_nTriangles, 1, 1,
+            //    32, 1, 1,
+            //    0
+            //);
 
             //sw.stop();
             //printf("%s %f\n", photonTrace, sw.getElapsedMs());
@@ -1376,6 +1434,7 @@ public:
 
                 m_shader->launch("lookupFlatten",
                     ShaderArgument()
+                    .value(eDescriptor)
                     .value(m_specularPaths.data())
                     .value(m_specularPathCounter.data())
                     .value(m_firstDiffuses.data())
@@ -1400,7 +1459,7 @@ public:
 
                 if (nPaths)
                 {
-                    // sw.start();
+                    //sw.start();
 
                     m_shader->launch(solveSpecularPath,
                         ShaderArgument()
@@ -1423,8 +1482,8 @@ public:
                         0
                     );
 
-                    // sw.stop();
-                    // printf("%s %f\n", solveSpecular, sw.getElapsedMs());
+                    //sw.stop();
+                    //printf("%s %f\n", solveSpecular, sw.getElapsedMs());
                 }
             }
 
