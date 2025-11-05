@@ -1300,8 +1300,8 @@ public:
     {
         using namespace pr;
 
-        //printf("---\n");
-        //DeviceStopwatch sw(0);
+        printf("---\n");
+        DeviceStopwatch sw(0);
         //sw.start();
 
         CauchyDispersion cauchy = BAF10_optical_glass();
@@ -1415,7 +1415,7 @@ public:
 
             if (nPaths)
             {
-                //sw.start();
+                sw.start();
 
                 m_shader->launch(solveSpecularPath,
                     ShaderArgument()
@@ -1438,8 +1438,8 @@ public:
                     0
                 );
 
-                //sw.stop();
-                //printf("%s %f\n", solveSpecular, sw.getElapsedMs());
+                sw.stop();
+                printf("%s %f\n", solveSpecularPath, sw.getElapsedMs());
             }
         };
 
