@@ -38,7 +38,7 @@ PK_DEVICE inline float rayOffsetScale(float3 p)
     p = fabs(p);
     float maxElem = fmaxf(fmaxf(fmaxf(p.x, p.y), p.z), 1.0f);
     float flt_eps = 1.192092896e-07F;
-    return maxElem * flt_eps * 16.0f;
+    return maxElem * flt_eps * 128.0f;
 }
 
 enum class Material : int
