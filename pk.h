@@ -12,6 +12,9 @@
 #if ( defined( __CUDACC__ ) || defined( __HIPCC__ ) )
 #define PK_KERNELCC
 #define PK_DEVICE __device__
+
+#define NATIVE_EXPF(x) __expf(x)
+#define NATIVE_LOGF(x) __logf(x)
 #else
 #include <initializer_list>
 #include <memory>
@@ -21,6 +24,9 @@
 #include "tinyhiponesweep.h"
 #include "camera.h"
 #define PK_DEVICE
+
+#define NATIVE_EXPF(x) std::expf(x)
+#define NATIVE_LOGF(x) std::logf(x)
 #endif
 
 #define MIN_VERTEX_DIST 1.0e-5f
@@ -921,7 +927,7 @@ namespace CIE_2015_10deg
         if (denom < 1.0e-15f) { denom = 1.0e-15f; }
         if (sigma * 2.0f < denom) { denom = sigma * 2.0f; }
         float k = (x - mean) / denom;
-        return expf(-k * k);
+        return NATIVE_EXPF(-k * k);
     }
     PK_DEVICE inline float cmf_x(float x) {
         float a = 0.42f * asymmetric_gaussian(x, 445.5849609375f, 31.146467208862305f, 0.06435633450746536f);
@@ -937,18 +943,18 @@ namespace CIE_2015_10deg
 
     PK_DEVICE inline float logistic_pdf(float x, float s)
     {
-        float k = expf(-fabsf(x) / s);
+        float k = NATIVE_EXPF(-fabsf(x) / s);
         return k / ((1.0 + k) * (1.0 + k) * s);
     }
     PK_DEVICE inline float logistic_cdf(float x, float s)
     {
-        return 1.0f / (1.0f + expf(-x / s));
+        return 1.0f / (1.0f + NATIVE_EXPF(-x / s));
     }
     PK_DEVICE inline float inverse_logistic_cdf(float u, float s)
     {
         if (0.99999994f < u) { u = 0.99999994f; }
         if (u < 1.175494351e-38f) { u = 1.175494351e-38f; }
-        return -s * logf(1.0f / u - 1.0f);
+        return -s * NATIVE_LOGF(1.0f / u - 1.0f);
     }
     PK_DEVICE inline float cmf_y_pdf(float x) {
         float sx = x - 554.270751953125f;
