@@ -119,7 +119,6 @@ extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* ro
                 attrib.shadingNormals[0] +
                 (attrib.shadingNormals[1] - attrib.shadingNormals[0]) * hit.uv.x +
                 (attrib.shadingNormals[2] - attrib.shadingNormals[0]) * hit.uv.y;
-            float3 ng = dot(ns, hit.ng) < 0.0f ? -hit.ng : hit.ng; // aligned
 
             if (m == Material::Diffuse)
             {
@@ -166,42 +165,36 @@ extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* ro
 
             eDescriptor.push_back(e);
 
+            float sign = 1.0f;
+            float3 wo;
             if (e == Event::R)
             {
-                float3 wo = reflection(wi, ns);
+                wo = reflection(wi, ns);
 
-                if (0.0f < dot(ng, wi) * dot(ng, wo)) // geometrically admissible
+                if (m == Material::Dielectric)
                 {
-                    float3 ng_norm = normalize(ng);
-                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
-                    rd = wo;
-
-                    if (m == Material::Dielectric)
-                    {
-                        throughtput *= reflectance;
-                    }
-                    continue;
+                    throughtput *= reflectance;
                 }
             }
             else if (e == Event::T)
             {
-                float3 wo;
-
                 if (refraction_norm_free(&wo, wi, ns, eta) == false)
                 {
                     break;
                 }
 
-                if (dot(ng, wi) * dot(ng, wo) < 0.0f) // geometrically admissible
-                {
-                    float3 ng_norm = normalize(ng);
-                    ro = p_hit + (dot(wo, ng) < 0.0f ? -ng_norm : ng_norm) * rayOffsetScale(p_hit);
-                    rd = wo;
-
-                    throughtput *= 1.0f - reflectance;
-                    continue;
-                }
+                sign = -1.0f;
+                throughtput *= 1.0f - reflectance;
             }
+
+            if (0.0f < dot(hit.ng, wi) * dot(hit.ng, wo) * sign) // geometrically admissible
+            {
+                float3 offset_dir = normalize(hit.ng * dot(hit.ng, wo));
+                ro = p_hit + offset_dir * rayOffsetScale(p_hit);
+                rd = wo;
+                continue;
+            }
+
             break;
         }
         if (admissiblePath && minThroughput < throughtput)
