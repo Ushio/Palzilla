@@ -160,7 +160,7 @@ int main() {
     AbcArchive archive;
     std::string err;
     archive.open(GetDataPath("assets/scene.abc"), err);
-    std::shared_ptr<FScene> scene = archive.readFlat(0, err);
+    std::shared_ptr<FScene> scene = archive.readFlat(32, err);
 
     int debug_index = 10;
 
@@ -175,7 +175,11 @@ int main() {
         {
             return;
         }
-
+        std::string name = polymesh->fullname();
+        if (name == "/light/pointlight")
+        {
+            return;
+        }
         AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
         Material material = Material::Diffuse;
         if (auto matCol = details->columnAsString("material"))
