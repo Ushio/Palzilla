@@ -321,6 +321,25 @@ struct PathCache
             f(m_pathes[index].tris, m_pathes[index].parameters);
         }
     }
+    template <class F>
+    PK_DEVICE void lookUpIndex(float3 p, F f) const
+    {
+        uint32_t hashOfP = spacial_hash(p, m_spatial_step);
+        uint32_t home = hashOfP % CACHE_STORAGE_COUNT;
+        for (int offset = 0; offset < CACHE_STORAGE_COUNT; offset++)
+        {
+            uint32_t index = (home + offset) % CACHE_STORAGE_COUNT;
+            if (m_hashsOfPath[index] == 0)
+            {
+                break; // no more cached
+            }
+            if (m_pathes[index].hashOfP != hashOfP)
+            {
+                continue;
+            }
+            f(index);
+        }
+    }
 
     float m_spatial_step = 1.0f;
     TypedBuffer<uint32_t> m_hashsOfPath;
@@ -996,6 +1015,14 @@ public:
     uint32_t m_height;
 };
 
+#define MAX_SPECULAR_PATH_COUNT (1u << 25)
+
+struct SpecularPath
+{
+    int pixel;
+    int cacheIndex;
+};
+
 
 #define STACK_BUFFER_MAX_WARPS ( 256 * 256 )
 #define STACK_BUFFER_MAX_ELEMENT 128
@@ -1237,6 +1264,9 @@ public:
             m_debugPoints.allocate(1 << 22);
             m_debugPointCount.allocate(1);
 
+            m_specularPathCounter.allocate(1);
+            m_specularPaths.allocate(MAX_SPECULAR_PATH_COUNT);
+
             m_pixels.allocate(imageWidth * imageHeight);
             m_accumulators.allocate(imageWidth * imageHeight);
             m_firstDiffuses.allocate(imageWidth * imageHeight);
@@ -1289,8 +1319,10 @@ public:
 
             char photonTrace[128];
             char solveSpecular[128];
+            char solveSpecularPath[128];
             sprintf(photonTrace, "photonTrace_K%d", K);
             sprintf(solveSpecular, "solveSpecular_K%d", K);
+            sprintf(solveSpecularPath, "solveSpecularPath_K%d", K);
 
             m_shader->launch(photonTrace,
                 ShaderArgument()
@@ -1330,27 +1362,87 @@ public:
                 }
             }
 
+            if (1)
+            {
+                //sw.start();
+
+                oroMemsetD32Async(m_specularPathCounter.data(), 0, 1, nullptr);
+
+                m_shader->launch("lookupFlatten",
+                    ShaderArgument()
+                    .value(m_specularPaths.data())
+                    .value(m_specularPathCounter.data())
+                    .value(m_firstDiffuses.data())
+                    .value(int2{ m_imageWidth, m_imageHeight })
+                    .ptr(&m_pathCache),
+                    div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
+                    16, 16, 1,
+                    0
+                );
+
+                uint32_t nPaths = 0;
+                oroMemcpyDtoH(&nPaths, m_specularPathCounter.data(), sizeof(uint32_t));
+
+                //sw.stop();
+                //printf("lookupFlatten %f\n", sw.getElapsedMs());
+
+                if (MAX_SPECULAR_PATH_COUNT <= nPaths)
+                {
+                    printf("nPaths <= MAX_SPECULAR_PATH_COUNT \n");
+                    abort();
+                }
+
+                if (nPaths)
+                {
+                    // sw.start();
+
+                    m_shader->launch(solveSpecularPath,
+                        ShaderArgument()
+                        .value(m_accumulators.data())
+                        .value(m_specularPaths.data())
+                        .value(nPaths)
+                        .value(m_firstDiffuses.data())
+                        .value(m_gpuBuilder->m_rootNode)
+                        .value(m_gpuBuilder->m_internals)
+                        .value(m_trianglesDevice.data())
+                        .value(m_triangleAttribsDevice.data())
+                        .value(to(m_p_light))
+                        .value(m_lightIntencity)
+                        .ptr(&m_pathCache)
+                        .value(eDescriptor)
+                        .value(cauchy)
+                        .value(m_iteration),
+                        div_round_up64(nPaths, 256), 1, 1,
+                        256, 1, 1,
+                        0
+                    );
+
+                    // sw.stop();
+                    // printf("%s %f\n", solveSpecular, sw.getElapsedMs());
+                }
+            }
+
             //sw.start();
 
-            m_shader->launch(solveSpecular,
-                ShaderArgument()
-                .value(m_accumulators.data())
-                .value(m_firstDiffuses.data())
-                .value(int2{ m_imageWidth, m_imageHeight })
-                .value(m_gpuBuilder->m_rootNode)
-                .value(m_gpuBuilder->m_internals)
-                .value(m_trianglesDevice.data())
-                .value(m_triangleAttribsDevice.data())
-                .value(to(m_p_light))
-                .value(m_lightIntencity)
-                .ptr(&m_pathCache)
-                .value(eDescriptor)
-                .value(cauchy)
-                .value(m_iteration),
-                div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
-                16, 16, 1,
-                0
-            );
+            //m_shader->launch(solveSpecular,
+            //    ShaderArgument()
+            //    .value(m_accumulators.data())
+            //    .value(m_firstDiffuses.data())
+            //    .value(int2{ m_imageWidth, m_imageHeight })
+            //    .value(m_gpuBuilder->m_rootNode)
+            //    .value(m_gpuBuilder->m_internals)
+            //    .value(m_trianglesDevice.data())
+            //    .value(m_triangleAttribsDevice.data())
+            //    .value(to(m_p_light))
+            //    .value(m_lightIntencity)
+            //    .ptr(&m_pathCache)
+            //    .value(eDescriptor)
+            //    .value(cauchy)
+            //    .value(m_iteration),
+            //    div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
+            //    16, 16, 1,
+            //    0
+            //);
 
             //sw.stop();
             //printf("%s %f\n", solveSpecular, sw.getElapsedMs());
@@ -1404,6 +1496,9 @@ public:
     TypedBuffer<float3> m_debugPoints = TypedBuffer<float3>(TYPED_BUFFER_DEVICE);
     TypedBuffer<int> m_debugPointCount = TypedBuffer<int>(TYPED_BUFFER_DEVICE);
     StackBufferAllocator m_stackBufferAllocator;
+
+    TypedBuffer<SpecularPath> m_specularPaths = TypedBuffer<SpecularPath>(TYPED_BUFFER_DEVICE);
+    TypedBuffer<uint32_t> m_specularPathCounter = TypedBuffer<uint32_t>(TYPED_BUFFER_DEVICE);
 
     int m_imageWidth = 0;
     int m_imageHeight = 0;
