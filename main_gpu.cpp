@@ -7,13 +7,14 @@
 
 #include "Orochi/Orochi.h"
 #include "pk.h"
+#include "prth.hpp"
 
-#if 0
+#if 1
 // -- final render --
 int main()
 {
     using namespace pr;
-    Stopwatch sw;
+    /*Stopwatch sw;*/
 
     SetDataDir(ExecutableDir());
 
@@ -51,8 +52,13 @@ int main()
     pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str(), GetDataPath("kernels").c_str());
     pkRenderer.allocate(1920, 1080);
 
+    ThreadPool pool(4);
+    TaskGroup group;
+
     for (int i = 0; i < pkRenderer.frameCount(); i++)
     {
+        Stopwatch sw;
+
         pkRenderer.loadFrame(i);
         pkRenderer.clear();
 
@@ -61,16 +67,27 @@ int main()
             pkRenderer.step();
         }
 
-        static Image2DRGBA8 image;
-        pkRenderer.resolve(&image);
+        std::shared_ptr<Image2DRGBA8> image(new Image2DRGBA8());
+        pkRenderer.resolve(image.get());
 
         char outputFile[128];
         sprintf(outputFile, "%03d.png", i);
-
-        image.saveAsPngUncompressed(outputFile);
+        std::string filePath = outputFile;
+        
+        group.addElements(1);
+        pool.enqueueTask([image, filePath, &group]() {
+            image->saveAsPngUncompressed(filePath.c_str());
+            group.doneElements(1);
+        });
 
         printf("frame %03d, %.2f\n", i, sw.elapsed());
     }
+
+    while (!group.isFinished())
+    {
+        pool.processTask();
+    }
+    printf("finish\n");
 }
 #else
 // --interactive mode --
@@ -110,7 +127,7 @@ int main()
     ITexture* texture = CreateTexture();
 
     bool syncLight = true;
-    int frameNumber = 230;
+    int frameNumber = 167;
 
     PKRenderer pkRenderer;
     
