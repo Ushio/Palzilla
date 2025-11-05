@@ -662,6 +662,10 @@ extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* ro
                 p_final = p_hit;
                 break;
             }
+            if (d == K) // finish
+            {
+                break;
+            }
 
             float3 wi = -rd;
             triIndices[d] = hit.triangleIndex;
