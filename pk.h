@@ -1342,6 +1342,7 @@ public:
         //printf("solvePrimary %f\n", sw.getElapsedMs());
 
         m_pathCache.clear();
+        oroMemsetD32(m_debugPointCount.data(), 0, 1);
 
         //sw.start();
 
@@ -1364,157 +1365,84 @@ public:
             0
         );
 
+        // printf(" occ %f\n", m_pathCache.occupancy());
+
         //sw.stop();
         //printf("photonTrace %f\n", sw.getElapsedMs());
 
-        //if (1)
-        //{
-        //    int nPoints = 0;
-        //    oroMemcpyDtoH(&nPoints, m_debugPointCount.data(), sizeof(int));
-        //    std::vector<float3> points(nPoints);
-        //    oroMemcpyDtoH(points.data(), m_debugPoints.data(), sizeof(float3) * nPoints);
-        //    for (int i = 0; i < nPoints; i++)
-        //    {
-        //        DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
-        //    }
-        //}
+        if (0)
+        {
+            int nPoints = 0;
+            oroMemcpyDtoH(&nPoints, m_debugPointCount.data(), sizeof(int));
+            std::vector<float3> points(nPoints);
+            oroMemcpyDtoH(points.data(), m_debugPoints.data(), sizeof(float3) * nPoints);
+            for (int i = 0; i < nPoints; i++)
+            {
+                DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
+            }
+        }
 
         auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
-            oroMemsetD32(m_debugPointCount.data(), 0, 1);
-            //m_pathCache.clear();
+            char solveSpecularPath[128];
+            sprintf(solveSpecularPath, "solveSpecularPath_K%d", K);
 
             //sw.start();
 
-            char photonTrace[128];
-            char solveSpecular[128];
-            char solveSpecularPath[128];
-            sprintf(photonTrace, "photonTrace_K%d", K);
-            sprintf(solveSpecular, "solveSpecular_K%d", K);
-            sprintf(solveSpecularPath, "solveSpecularPath_K%d", K);
+            oroMemsetD32Async(m_specularPathCounter.data(), 0, 1, nullptr);
 
-            //m_shader->launch(photonTrace,
-            //    ShaderArgument()
-            //    .value(m_gpuBuilder->m_rootNode)
-            //    .value(m_gpuBuilder->m_internals)
-            //    .value(m_trianglesDevice.data())
-            //    .value(m_triangleAttribsDevice.data())
-            //    .value(to(m_p_light))
-            //    .value(eDescriptor)
-            //    .value(cauchy(VISIBLE_SPECTRUM_MIN))
-            //    .value(cauchy(VISIBLE_SPECTRUM_MAX))
-            //    .value(m_iteration)
-            //    .ptr(&m_pathCache)
-            //    .value(m_minThroughput)
-            //    .value(m_debugPoints.data())
-            //    .value(m_debugPointCount.data()),
-            //    m_gpuBuilder->m_nTriangles, 1, 1,
-            //    32, 1, 1,
-            //    0
-            //);
+            m_shader->launch("lookupFlatten",
+                ShaderArgument()
+                .value(eDescriptor)
+                .value(m_specularPaths.data())
+                .value(m_specularPathCounter.data())
+                .value(m_firstDiffuses.data())
+                .value(int2{ m_imageWidth, m_imageHeight })
+                .ptr(&m_pathCache),
+                div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
+                16, 16, 1,
+                0
+            );
+
+            uint32_t nPaths = 0;
+            oroMemcpyDtoH(&nPaths, m_specularPathCounter.data(), sizeof(uint32_t));
 
             //sw.stop();
-            //printf("%s %f\n", photonTrace, sw.getElapsedMs());
+            //printf("lookupFlatten %f\n", sw.getElapsedMs());
 
-            //printf(" occ %f\n", m_pathCache.occupancy());
-
-            // debug view
-            if (0)
+            if (MAX_SPECULAR_PATH_COUNT <= nPaths)
             {
-                int nPoints = 0;
-                oroMemcpyDtoH(&nPoints, m_debugPointCount.data(), sizeof(int));
-                std::vector<float3> points(nPoints);
-                oroMemcpyDtoH(points.data(), m_debugPoints.data(), sizeof(float3) * nPoints);
-                for (int i = 0; i < nPoints; i++)
-                {
-                    DrawPoint(to(points[i]), { 255, 0, 0 }, 2);
-                }
+                printf("nPaths <= MAX_SPECULAR_PATH_COUNT \n");
+                abort();
             }
 
-            if (1)
+            if (nPaths)
             {
                 //sw.start();
 
-                oroMemsetD32Async(m_specularPathCounter.data(), 0, 1, nullptr);
-
-                m_shader->launch("lookupFlatten",
+                m_shader->launch(solveSpecularPath,
                     ShaderArgument()
-                    .value(eDescriptor)
+                    .value(m_accumulators.data())
                     .value(m_specularPaths.data())
-                    .value(m_specularPathCounter.data())
+                    .value(nPaths)
                     .value(m_firstDiffuses.data())
-                    .value(int2{ m_imageWidth, m_imageHeight })
-                    .ptr(&m_pathCache),
-                    div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
-                    16, 16, 1,
+                    .value(m_gpuBuilder->m_rootNode)
+                    .value(m_gpuBuilder->m_internals)
+                    .value(m_trianglesDevice.data())
+                    .value(m_triangleAttribsDevice.data())
+                    .value(to(m_p_light))
+                    .value(m_lightIntencity)
+                    .ptr(&m_pathCache)
+                    .value(eDescriptor)
+                    .value(cauchy)
+                    .value(m_iteration),
+                    div_round_up64(nPaths, 256), 1, 1,
+                    256, 1, 1,
                     0
                 );
 
-                uint32_t nPaths = 0;
-                oroMemcpyDtoH(&nPaths, m_specularPathCounter.data(), sizeof(uint32_t));
-
                 //sw.stop();
-                //printf("lookupFlatten %f\n", sw.getElapsedMs());
-
-                if (MAX_SPECULAR_PATH_COUNT <= nPaths)
-                {
-                    printf("nPaths <= MAX_SPECULAR_PATH_COUNT \n");
-                    abort();
-                }
-
-                if (nPaths)
-                {
-                    //sw.start();
-
-                    m_shader->launch(solveSpecularPath,
-                        ShaderArgument()
-                        .value(m_accumulators.data())
-                        .value(m_specularPaths.data())
-                        .value(nPaths)
-                        .value(m_firstDiffuses.data())
-                        .value(m_gpuBuilder->m_rootNode)
-                        .value(m_gpuBuilder->m_internals)
-                        .value(m_trianglesDevice.data())
-                        .value(m_triangleAttribsDevice.data())
-                        .value(to(m_p_light))
-                        .value(m_lightIntencity)
-                        .ptr(&m_pathCache)
-                        .value(eDescriptor)
-                        .value(cauchy)
-                        .value(m_iteration),
-                        div_round_up64(nPaths, 256), 1, 1,
-                        256, 1, 1,
-                        0
-                    );
-
-                    //sw.stop();
-                    //printf("%s %f\n", solveSpecular, sw.getElapsedMs());
-                }
+                //printf("%s %f\n", solveSpecular, sw.getElapsedMs());
             }
-
-            //sw.start();
-
-            //m_shader->launch(solveSpecular,
-            //    ShaderArgument()
-            //    .value(m_accumulators.data())
-            //    .value(m_firstDiffuses.data())
-            //    .value(int2{ m_imageWidth, m_imageHeight })
-            //    .value(m_gpuBuilder->m_rootNode)
-            //    .value(m_gpuBuilder->m_internals)
-            //    .value(m_trianglesDevice.data())
-            //    .value(m_triangleAttribsDevice.data())
-            //    .value(to(m_p_light))
-            //    .value(m_lightIntencity)
-            //    .ptr(&m_pathCache)
-            //    .value(eDescriptor)
-            //    .value(cauchy)
-            //    .value(m_iteration),
-            //    div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
-            //    16, 16, 1,
-            //    0
-            //);
-
-            //sw.stop();
-            //printf("%s %f\n", solveSpecular, sw.getElapsedMs());
         };
 
         solveSpecular(1, { Event::T });
