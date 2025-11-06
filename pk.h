@@ -459,13 +459,6 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
 
         for (int i = 0; i < nParameters; i++)
         {
-            saka::dval parameters_optimizable[nParameters];
-            for (int j = 0; j < nParameters; j++)
-            {
-                parameters_optimizable[j] = parameters[j];
-            }
-            parameters_optimizable[i].requires_grad();
-
             saka::dval3 vertices[K + 2];
             vertices[0] = saka::make_dval3(p_beg);
             vertices[K + 1] = saka::make_dval3(p_end);
@@ -474,8 +467,10 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
 
             for (int k = 0; k < K; k++)
             {
-                saka::dval param_u = parameters_optimizable[k * 2 + 0];
-                saka::dval param_v = parameters_optimizable[k * 2 + 1];
+                float pu = parameters[k * 2 + 0];
+                float pv = parameters[k * 2 + 1];
+                saka::dval param_u = saka::dval(pu, k * 2 + 0 == i /* requires_grad */);
+                saka::dval param_v = saka::dval(pv, k * 2 + 1 == i /* requires_grad */);
 
                 minimum_lbvh::Triangle tri = tris[k];
 
