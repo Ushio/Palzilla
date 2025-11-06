@@ -365,6 +365,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     firstDiffuses[pixel].p = p;
     firstDiffuses[pixel].ng = n;
     firstDiffuses[pixel].R = reflectance;
+    firstDiffuses[pixel].lambda = lambda;
 
     accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }
@@ -422,6 +423,7 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
     float3 p = firstDiffuse.p;
     float3 n = firstDiffuse.ng;
     float3 R = firstDiffuse.R;
+    float lambda = firstDiffuse.lambda;
 
     const PathCache::TrianglePath& thePath = pathCache->m_pathes[specularPath.cacheIndex];
 
@@ -440,9 +442,6 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
         //parameters[i] = 1.0f / 3.0f;
     }
 
-    float2 lambda_random;
-    sobol::shuffled_scrambled_sobol_2d(&lambda_random.x, &lambda_random.y, iteration, specularPath.pixel, 54657, 178);
-    float lambda = CIE_2015_10deg::cmf_y_sample(lambda_random.x);
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
 
     float eta = cauchy(lambda);

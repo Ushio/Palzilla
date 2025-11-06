@@ -61,6 +61,7 @@ struct FirstDiffuse
     float3 p;
     float3 ng;
     float3 R;
+    float lambda; // spectrum
 };
 
 PK_DEVICE inline bool occluded(
