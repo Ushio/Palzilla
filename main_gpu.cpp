@@ -14,7 +14,7 @@
 int main()
 {
     using namespace pr;
-    /*Stopwatch sw;*/
+    Stopwatch sw;
 
     SetDataDir(ExecutableDir());
 
@@ -28,7 +28,7 @@ int main()
         return 0;
     }
 
-    int DEVICE_INDEX = 2;
+    int DEVICE_INDEX = 0;
     oroInit(0);
     oroDevice device;
     oroDeviceGet(&device, DEVICE_INDEX);
@@ -57,12 +57,10 @@ int main()
 
     for (int i = 0; i < pkRenderer.frameCount(); i++)
     {
-        Stopwatch sw;
-
         pkRenderer.loadFrame(i);
         pkRenderer.clear();
 
-        for (int j = 0; j < 16; j++)
+        for (int j = 0; j < 32; j++)
         {
             pkRenderer.step();
         }
