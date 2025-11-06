@@ -12,7 +12,8 @@ namespace saka
     {
     public:
         SAKA_DEVICE dval(): v(0.0f), g(0.0f) {}
-        SAKA_DEVICE dval(float x) :v(x), g(0.0f) {}
+        SAKA_DEVICE dval(float x) : v(x), g(0.0f) {}
+        SAKA_DEVICE dval(float x, bool requires_grad) :v(x), g(requires_grad) {}
 
         SAKA_DEVICE void requires_grad()
         {
