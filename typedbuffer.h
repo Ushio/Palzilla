@@ -68,6 +68,16 @@ struct TypedBuffer
         other.m_data = nullptr;
         other.m_size = 0;
     }
+    void swap(TypedBuffer<T>* rhs)
+    {
+        std::swap(m_data, rhs->m_data);
+        auto s = m_size;
+        m_size = rhs->m_size;
+        rhs->m_size = s;
+        auto d = m_isDevice;
+        m_isDevice = rhs->m_isDevice;
+        rhs->m_isDevice = d;
+    }
 #endif
 
     TYPED_BUFFER_DEVICE_INLINE size_t size() const { return m_size; }

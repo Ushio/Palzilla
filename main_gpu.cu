@@ -400,6 +400,7 @@ extern "C" __global__ void lookupFlatten(EventDescriptor eDescriptor, SpecularPa
     pathCache.lookUpIndex(p, eDescriptor, [&](int index) {
         specularPaths[head + iPath].pixel = pixel;
         specularPaths[head + iPath].cacheIndex = index;
+        specularPaths[head + iPath].hashOfPath = pathCache.m_hashsOfPath[index];
 
         iPath++;
     });
@@ -498,4 +499,28 @@ extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
         srgb_oetf(acc.z / acc.w),
         1.0f }
     );
+}
+
+extern "C" __global__ void toIndexed(IndexedSpecularPath* indexedSpecularPaths, const SpecularPath* specularPath, int n)
+{
+    int xi = threadIdx.x + blockDim.x * blockIdx.x;
+    if (n <= xi)
+    {
+        return;
+    }
+
+    indexedSpecularPaths[xi].hashOfPath = specularPath[xi].hashOfPath;
+    indexedSpecularPaths[xi].index = xi;
+}
+
+extern "C" __global__ void reorderSpecularPath(IndexedSpecularPath* indexedSpecularPaths, SpecularPath* dstSpecularPath, const SpecularPath* srcSpecularPath, int n)
+{
+    int xi = threadIdx.x + blockDim.x * blockIdx.x;
+    if (n <= xi)
+    {
+        return;
+    }
+
+    uint32_t index = indexedSpecularPaths[xi].index;
+    dstSpecularPath[xi] = srcSpecularPath[index];
 }

@@ -76,6 +76,7 @@ project "main_gpu"
     -- Src
     files { "main_gpu.cpp" }
     files { "*.h" }
+    files { "*.natvis" }
 
     defines {"NO_GET_DEVICE_PROPERTIES"}
 
