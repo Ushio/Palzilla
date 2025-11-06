@@ -950,10 +950,10 @@ namespace CIE_2015_10deg
         return (a + b - a * b * 42.559776306152344f) * 1.0008530432426956f;
     }
     PK_DEVICE inline float cmf_y(float x) {
-        return 1.0f * asymmetric_gaussian(x, 556.8383178710938f, 66.54190826416016f, -0.026492968201637268f) * 1.004315086937574;
+        return 1.0f * asymmetric_gaussian(x, 556.8383178710938f, 66.54190826416016f, -0.026492968201637268f) * 1.004315086937574f;
     }
     PK_DEVICE inline float cmf_z(float x) {
-        return 2.146832f * asymmetric_gaussian(x, 445.9251708984375f, 30.91781997680664f, 0.08379141241312027f) * 0.9975112815948937;
+        return 2.146832f * asymmetric_gaussian(x, 445.9251708984375f, 30.91781997680664f, 0.08379141241312027f) * 0.9975112815948937f;
     }
 
     PK_DEVICE inline float logistic_pdf(float x, float s)
@@ -992,7 +992,7 @@ namespace CIE_2015_10deg
 PK_DEVICE inline float3 xyz2srgblinear(float3 xyz)
 {
     float3 srgblinear = {
-		dot({3.2406f, -1.5372f, -0.4986}, xyz),
+		dot({3.2406f, -1.5372f, -0.4986f}, xyz),
 		dot({-0.9689f,  1.8758f,  0.0415f}, xyz),
 		dot({0.0557f, -0.204f,   1.057f}, xyz),
 	};
@@ -1298,8 +1298,8 @@ public:
     {
         using namespace pr;
 
-        printf("---\n");
-        DeviceStopwatch sw(0);
+        //printf("---\n");
+        //DeviceStopwatch sw(0);
         //sw.start();
 
         CauchyDispersion cauchy = BAF10_optical_glass();
@@ -1413,7 +1413,7 @@ public:
 
             if (nPaths)
             {
-                sw.start();
+                //sw.start();
 
                 m_shader->launch(solveSpecularPath,
                     ShaderArgument()
@@ -1436,8 +1436,8 @@ public:
                     0
                 );
 
-                sw.stop();
-                printf("%s %f\n", solveSpecularPath, sw.getElapsedMs());
+                //sw.stop();
+                //printf("%s %f\n", solveSpecularPath, sw.getElapsedMs());
             }
         };
 

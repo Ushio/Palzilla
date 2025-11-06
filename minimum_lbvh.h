@@ -797,8 +797,8 @@ namespace minimum_lbvh
 
 		void build(const Triangle* triangles, int nTriangles, uint32_t buildOption, tinyhiponesweep::OnesweepSort& sorter, oroStream stream)
 		{
-			DeviceStopwatch sw(stream);
-			sw.start();
+			//DeviceStopwatch sw(stream);
+			//sw.start();
 
 			m_nTriangles = nTriangles;
 
@@ -881,8 +881,8 @@ namespace minimum_lbvh
 			oroFreeAsync(indexedMortonsTmp, stream);
 			oroFreeAsync(deltas, stream);
 
-			sw.stop();
-			printf("%f ms\n", sw.getElapsedMs());
+			//sw.stop();
+			//printf("%f ms\n", sw.getElapsedMs());
 		}
 		bool empty() const
 		{
