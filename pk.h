@@ -29,6 +29,7 @@
 #define NATIVE_LOGF(x) std::logf(x)
 #endif
 
+#define PHOTON_BLOCK_SIZE 256
 #define PHOTON_TRACE_MAX_DEPTH 4
 
 #define MIN_VERTEX_DIST 1.0e-5f
@@ -1295,7 +1296,7 @@ public:
         }
     }
 
-    void step()
+    void step( bool runPhotonTrace = true )
     {
         using namespace pr;
 
@@ -1333,38 +1334,41 @@ public:
         //sw.stop();
         //printf("solvePrimary %f\n", sw.getElapsedMs());
 
-        m_pathCache.clear();
+        if (runPhotonTrace)
+        {
+            m_pathCache.clear();
 
 #if defined(SHOW_VALID_CACHE)
-        oroMemsetD32(m_debugPointCount.data(), 0, 1);
+            oroMemsetD32(m_debugPointCount.data(), 0, 1);
 #endif
 
-        //sw.start();
+            //sw.start();
 
-        m_shader->launch("photonTrace",
-            ShaderArgument()
-            .value(m_gpuBuilder->m_rootNode)
-            .value(m_gpuBuilder->m_internals)
-            .value(m_trianglesDevice.data())
-            .value(m_triangleAttribsDevice.data())
-            .value(to(m_p_light))
-            .value(cauchy(VISIBLE_SPECTRUM_MIN))
-            .value(cauchy(VISIBLE_SPECTRUM_MAX))
-            .value(m_iteration)
-            .ptr(&m_pathCache)
-            .value(m_minThroughput)
-            .value(m_debugPoints.data())
-            .value(m_debugPointCount.data())
-            .value(m_stackBufferAllocator.data()),
-            m_gpuBuilder->m_nTriangles, 1, 1,
-            32, 1, 1,
-            0
-        );
+            m_shader->launch("photonTrace",
+                ShaderArgument()
+                .value(m_gpuBuilder->m_rootNode)
+                .value(m_gpuBuilder->m_internals)
+                .value(m_trianglesDevice.data())
+                .value(m_triangleAttribsDevice.data())
+                .value(to(m_p_light))
+                .value(cauchy(VISIBLE_SPECTRUM_MIN))
+                .value(cauchy(VISIBLE_SPECTRUM_MAX))
+                .value(m_iteration)
+                .ptr(&m_pathCache)
+                .value(m_minThroughput)
+                .value(m_debugPoints.data())
+                .value(m_debugPointCount.data())
+                .value(m_stackBufferAllocator.data()),
+                m_gpuBuilder->m_nTriangles, 1, 1,
+                PHOTON_BLOCK_SIZE, 1, 1,
+                0
+            );
 
-        // printf(" occ %f\n", m_pathCache.occupancy());
+            // printf(" occ %f\n", m_pathCache.occupancy());
 
-        //sw.stop();
-        //printf("photonTrace %f\n", sw.getElapsedMs());
+            //sw.stop();
+            //printf("photonTrace %f\n", sw.getElapsedMs());
+        }
 
 #if defined(SHOW_VALID_CACHE)
         {

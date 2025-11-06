@@ -55,7 +55,7 @@ extern "C" __global__ void normal(uint32_t *pixels, int2 imageSize, RayGenerator
         }
     }
 }
-extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, float eta_min, float eta_max, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount, NodeIndex* stackBuffer)
+extern "C" __global__ void __launch_bounds__(PHOTON_BLOCK_SIZE) photonTrace(const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* attribs, float3 p_light, float eta_min, float eta_max, int iteration, PathCache pathCache, float minThroughput, float3* debugPoints, int* debugPointCount, NodeIndex* stackBuffer)
 {
     StackBufferWarp stackBufferWarp(stackBuffer);
 
@@ -80,7 +80,7 @@ extern "C" __global__ void __launch_bounds__(32) photonTrace(const NodeIndex* ro
         K = PHOTON_TRACE_MAX_DEPTH
     };
 
-    for (int j = 0; j < 8; j++)
+    for (int j = 0; j < 1; j++)
     {
         float2 params = {};
         sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, iteration, iTri, 789);
