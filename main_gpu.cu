@@ -380,6 +380,10 @@ extern "C" __global__ void lookupFlatten(EventDescriptor eDescriptor, SpecularPa
 
     int pixel = xi + yi * imageSize.x;
     FirstDiffuse firstDiffuse = firstDiffuses[pixel];
+    if (firstDiffuse.R.x == 0.0f && firstDiffuse.R.y == 0.0f && firstDiffuse.R.z == 0.0f) // invalid
+    {
+        return;
+    }
 
     float3 p = firstDiffuse.p;
     int nPaths = 0;
