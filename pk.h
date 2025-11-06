@@ -442,13 +442,15 @@ struct SolverEmptyCallback {
 
 // parameters: output barycentric coordinates
 template <int K, class callback = SolverEmptyCallback >
-PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, callback end_of_iter = SolverEmptyCallback())
+PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, float3 p_end, minimum_lbvh::Triangle tris[K], TriangleAttrib attribs[K], float eta, EventDescriptor eDescriptor, int maxIterations, float costTolerance, int earlyTermWarmUp, callback end_of_iter = SolverEmptyCallback())
 {
     const int nParameters = K * 2;
     //for (int i = 0; i < nParameters; i++)
     //{
     //    parameters[i] = 1.0f / 3.0f;
     //}
+
+    float edge_eps = 0.25f;
 
     for (int iter = 0; iter < maxIterations; iter++)
     {
@@ -545,20 +547,21 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
             parameters[i] = parameters[i] - dparams(i, 0);
         }
 
-        // extreme values can be rejected earlier
-        if (4 /* it is an adhoc parameter but need some for thin triangles */ < iter)
+
+        // converged outside can be rejected earlier
+        if (earlyTermWarmUp <= iter)
         {
             for (int k = 0; k < K; k++)
             {
                 float param_u = parameters[k * 2 + 0];
                 float param_v = parameters[k * 2 + 1];
-
-                // out side of triangle
-                if (param_u < -0.5f || param_v < -0.5f || 1.5f < param_u + param_v)
+                if (-edge_eps < param_u && -edge_eps < param_v && param_u + param_v < 1.0f + edge_eps)
                 {
-                    return false;
+                    continue;
                 }
+                return false; // out side of triangle
             }
+            edge_eps *= edge_eps;
         }
 
         end_of_iter(iter, iter == maxIterations - 1);

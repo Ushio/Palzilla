@@ -1462,7 +1462,7 @@ int main() {
             {
                 parameters[i] = initials[i];
             }
-            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 1.3f, es, 1024, 1.0e-7f, [&](int iter, bool converged) {
+            bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 1.3f, es, 1024, 1.0e-7f, 4 /*warm up*/, [&](int iter, bool converged) {
                 float3 vertices[K + 2];
                 vertices[0] = to(P0);
                 vertices[K + 1] = to(P2);
@@ -1784,7 +1784,7 @@ int main() {
                     {
                         parameters[i] = photon_parameters[i];
                     }
-                    bool converged = solveConstraints<K>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
+                    bool converged = solveConstraints<K>(parameters, to(p_light), p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f, 1 /*warm up*/);
 
                     if (converged)
                     {
@@ -1845,7 +1845,7 @@ int main() {
         //ImGui::SliderFloat("initials1", &initials[1], 0, 1);
         //ImGui::SliderFloat("initials2", &initials[2], 0, 1);
         //ImGui::SliderFloat("initials3", &initials[3], 0, 1);
-        ImGui::SliderFloat("light_intencity", &light_intencity, 0, 5);
+        //ImGui::SliderFloat("light_intencity", &light_intencity, 0, 5);
         
         //ImGui::InputFloat("admissibleT", &admissibleT, 0.01f);
 

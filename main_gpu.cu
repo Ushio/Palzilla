@@ -446,7 +446,7 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
 
     float eta = cauchy(lambda);
-    bool converged = solveConstraints<K>(parameters, p_light, p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
+    bool converged = solveConstraints<K>(parameters, p_light, p, tris, attribs, eta, eDescriptor, 32, 1.0e-10f, 1 /* warm up */);
 
     if (converged)
     {
