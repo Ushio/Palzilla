@@ -6,8 +6,6 @@
 
 using namespace minimum_lbvh;
 
-constexpr float PI = 3.14159265358979323846f;
-
 __device__ uint32_t packRGBA( float4 color )
 {
     int4 i4 = make_int4(color * 255.0f + make_float4(0.5f));
