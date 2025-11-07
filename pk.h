@@ -1028,6 +1028,13 @@ PK_DEVICE inline float srgb_oetf( float r )
 
 #define INTEGRAL_OF_CMF_Y_IN_NM 118.51810464018001f
 
+struct LensParams
+{
+    float distance;
+    float thickness;
+    float R;
+};
+
 PK_DEVICE inline bool solveLens(float3* ro, float3* rd, float3 cameraOrigin, float3 cameraForward, float distance, float thickness, float R, float eta)
 {
     float3 lensOrigin = cameraOrigin + cameraForward * distance;
@@ -1370,6 +1377,7 @@ public:
             .value(m_firstDiffuses.data())
             .value(int2{ m_imageWidth, m_imageHeight })
             .value(rayGenerator)
+            .value(m_lensParams)
             .value(m_gpuBuilder->m_rootNode)
             .value(m_gpuBuilder->m_internals)
             .value(m_trianglesDevice.data())
@@ -1596,6 +1604,12 @@ public:
     float m_lightIntencity = 5.0f;
     float m_minThroughput = 0.05f;
     float m_radianceClamp = 4.0f;
+
+    LensParams m_lensParams = {
+        0.6f,  // distance
+        0.05f, // thickness
+        3.0f   // R
+    };
     pr::Camera3D m_camera;
 
     bool m_loadCamera = true;

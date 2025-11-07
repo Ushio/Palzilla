@@ -9,7 +9,7 @@
 #include "pk.h"
 #include "prth.hpp"
 
-#if 1
+#if 0
 // -- final render --
 int main()
 {
@@ -125,7 +125,7 @@ int main()
     ITexture* texture = CreateTexture();
 
     bool syncLight = true;
-    int frameNumber = 167;
+    int frameNumber = 166;
 
     PKRenderer pkRenderer;
     
@@ -216,6 +216,18 @@ int main()
             pkRenderer.clear();
         }
         if (ImGui::SliderFloat("radianceClamp", &pkRenderer.m_radianceClamp, 0, 50))
+        {
+            pkRenderer.clear();
+        }
+        if (ImGui::InputFloat("lens distance", &pkRenderer.m_lensParams.distance, 0.1f))
+        {
+            pkRenderer.clear();
+        }
+        if (ImGui::InputFloat("lens R", &pkRenderer.m_lensParams.R, 0.1f))
+        {
+            pkRenderer.clear();
+        }
+        if (ImGui::InputFloat("lens thickness", &pkRenderer.m_lensParams.thickness, 0.1f))
         {
             pkRenderer.clear();
         }

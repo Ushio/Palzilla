@@ -210,7 +210,7 @@ extern "C" __global__ void __launch_bounds__(PHOTON_BLOCK_SIZE) photonTrace(cons
     }
 }
 
-extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration, NodeIndex *stackBuffer)
+extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accumulators, FirstDiffuse* firstDiffuses, int2 imageSize, RayGenerator rayGenerator, LensParams lensParams, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, CauchyDispersion cauchy, Texture8RGBX floorTex, int iteration, NodeIndex *stackBuffer)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -237,7 +237,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
     float eta = cauchy(lambda);
 
-    solveLens(&ro, &rd, rayGenerator.origin(), rayGenerator.forward(), 0.6f /*distance*/, 0.05f/*thickness*/, 2.0f /*R*/, eta);
+    solveLens(&ro, &rd, rayGenerator.origin(), rayGenerator.forward(), lensParams.distance, lensParams.thickness/*thickness*/, lensParams.R /*R*/, eta);
 
     bool hasDiffuseHit = false;
     minimum_lbvh::Hit hit_last;
