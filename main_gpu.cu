@@ -410,6 +410,150 @@ extern "C" __global__ void lookupFlatten(EventDescriptor eDescriptor, SpecularPa
     });
 }
 
+extern "C" __global__ void binningSpecularPaths(EventDescriptor eDescriptor, uint32_t* specularPathBuckets, uint32_t* specularPathBucketCounter, const FirstDiffuse* firstDiffuses, int2 imageSize, PathCache pathCache)
+{
+    int xi = threadIdx.x + blockDim.x * blockIdx.x;
+    int yi = threadIdx.y + blockDim.y * blockIdx.y;
+
+    if (imageSize.x <= xi || imageSize.y <= yi)
+    {
+        return;
+    }
+
+    int pixel = xi + yi * imageSize.x;
+    FirstDiffuse firstDiffuse = firstDiffuses[pixel];
+    if (firstDiffuse.R.x == 0.0f && firstDiffuse.R.y == 0.0f && firstDiffuse.R.z == 0.0f) // invalid
+    {
+        return;
+    }
+
+    float3 p = firstDiffuse.p;
+    pathCache.lookUpIndex(p, eDescriptor, [&](int index) {
+        uint32_t hashOfPath = pathCache.m_hashsOfPath[index];
+        uint32_t home = hashOfPath % MAX_SPECULAR_PATH_BUCKET_SIZE;
+        atomicInc(&specularPathBucketCounter[home], 0xFFFFFFFF);
+    });
+}
+
+template <int NThreads>
+__device__ inline uint32_t prefixSumExclusive(uint32_t prefix, uint32_t* sMemIO)
+{
+    uint32_t value = sMemIO[threadIdx.x];
+
+    for (uint32_t offset = 1; offset < NThreads; offset <<= 1)
+    {
+        uint32_t x = sMemIO[threadIdx.x];
+
+        if (offset <= threadIdx.x)
+        {
+            x += sMemIO[threadIdx.x - offset];
+        }
+
+        __syncthreads();
+
+        sMemIO[threadIdx.x] = x;
+
+        __syncthreads();
+    }
+    uint32_t sum = sMemIO[NThreads - 1];
+
+    __syncthreads();
+
+    sMemIO[threadIdx.x] += prefix - value;
+
+    __syncthreads();
+
+    return sum;
+}
+
+extern "C" __global__ void flattenSpecularPaths(EventDescriptor eDescriptor, SpecularPath* specularPaths, uint32_t* specularPathBucketCounter, const FirstDiffuse* firstDiffuses, int2 imageSize, PathCache pathCache)
+{
+    int xi = threadIdx.x + blockDim.x * blockIdx.x;
+    int yi = threadIdx.y + blockDim.y * blockIdx.y;
+
+    if (imageSize.x <= xi || imageSize.y <= yi)
+    {
+        return;
+    }
+
+    int pixel = xi + yi * imageSize.x;
+    FirstDiffuse firstDiffuse = firstDiffuses[pixel];
+    if (firstDiffuse.R.x == 0.0f && firstDiffuse.R.y == 0.0f && firstDiffuse.R.z == 0.0f) // invalid
+    {
+        return;
+    }
+
+    float3 p = firstDiffuse.p;
+
+    pathCache.lookUpIndex(p, eDescriptor, [&](int index) {
+        uint32_t hashOfPath = pathCache.m_hashsOfPath[index];
+        uint32_t home = hashOfPath % MAX_SPECULAR_PATH_BUCKET_SIZE;
+        uint32_t head = atomicInc(&specularPathBucketCounter[home], 0xFFFFFFFF);
+
+        specularPaths[head].pixel = pixel;
+        specularPaths[head].cacheIndex = index;
+        //specularPaths[head].hashOfPath = hashOfPath;
+    });
+}
+
+extern "C" __global__ void prefixScanSpecularPath(uint32_t* inout, uint64_t* g_iterator)
+{
+    __shared__ uint32_t gp;
+    __shared__ uint32_t smem[PSUM_SCAN_BLOCK_SIZE];
+
+    uint32_t blockIndex = blockIdx.x;
+
+    uint32_t itemIndex = blockIndex * PSUM_SCAN_BLOCK_SIZE + threadIdx.x;
+    uint32_t item = inout[itemIndex];
+    smem[threadIdx.x] = item;
+
+    __syncthreads();
+
+    // local sum of elements
+    for (int i = 1; i < PSUM_SCAN_BLOCK_SIZE; i <<= 1)
+    {
+        uint32_t a = smem[threadIdx.x];
+        uint32_t b = smem[threadIdx.x ^ i];
+        __syncthreads();
+        smem[threadIdx.x] = a + b;
+        __syncthreads();
+    }
+
+    uint32_t prefix = smem[0];
+
+    if (threadIdx.x == 0)
+    {
+        uint64_t expected;
+        uint64_t cur = *g_iterator;
+        uint32_t globalPrefix = cur & 0xFFFFFFFF;
+        do
+        {
+            expected = (uint64_t)globalPrefix + ((uint64_t)(blockIndex) << 32);
+            uint64_t newValue = (uint64_t)globalPrefix + prefix | ((uint64_t)(blockIndex + 1) << 32);
+            cur = atomicCAS(g_iterator, expected, newValue);
+            globalPrefix = cur & 0xFFFFFFFF;
+
+        } while (cur != expected);
+
+        gp = globalPrefix;
+    }
+
+    __syncthreads();
+
+    uint32_t globalPrefix = gp;
+    
+    // prefix sum local
+    smem[threadIdx.x] = item;
+
+    __syncthreads();
+
+    prefixSumExclusive<PSUM_SCAN_BLOCK_SIZE>(globalPrefix, smem);
+
+    inout[itemIndex] = smem[threadIdx.x];
+}
+
+
+
 template <int K>
 __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPaths, uint32_t specularPathCount, const FirstDiffuse* firstDiffuses, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, PathCache* pathCache, EventDescriptor eDescriptor, CauchyDispersion cauchy, int iteration)
 {

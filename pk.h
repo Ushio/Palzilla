@@ -30,7 +30,16 @@
 #endif
 
 #define PHOTON_BLOCK_SIZE 256
+
 #define PHOTON_TRACE_MAX_DEPTH 4
+
+#define PATCH_CACHE_BUCKET_SIZE (1u << 22)
+
+// used to determine hash table size
+#define MAX_SPECULAR_PATH_BUCKET_SIZE (1u << 16)
+
+#define PSUM_SCAN_BLOCK_SIZE 256
+static_assert(MAX_SPECULAR_PATH_BUCKET_SIZE % PSUM_SCAN_BLOCK_SIZE == 0, "");
 
 #define MIN_VERTEX_DIST 1.0e-5f
 
@@ -208,7 +217,7 @@ struct PathCache
 {
     enum {
         MAX_PATH_LENGTH = PHOTON_TRACE_MAX_DEPTH,
-        CACHE_STORAGE_COUNT = 1u << 22
+        CACHE_STORAGE_COUNT = PATCH_CACHE_BUCKET_SIZE
     };
 
     struct TrianglePath
@@ -275,7 +284,7 @@ struct PathCache
         {
             hashOfPath = minimum_lbvh::hashPCG(hashOfPath + tris[d]);
         }
-        hashOfPath |= 1u;
+        hashOfPath = 0 < hashOfPath ? hashOfPath : 1;
 
         bool success = false;
 
@@ -1294,6 +1303,11 @@ public:
 
             m_specularPathCounter.allocate(1);
             m_specularPaths.allocate(MAX_SPECULAR_PATH_COUNT);
+
+            m_specularPathBuckets.allocate(MAX_SPECULAR_PATH_BUCKET_SIZE);
+            m_specularPathBucketCounter.allocate(MAX_SPECULAR_PATH_BUCKET_SIZE);
+            m_specularPathPsumIterator.allocate(2);
+
             m_specularPathsTmp.allocate(MAX_SPECULAR_PATH_COUNT);
             m_indexedSpecularPaths.allocate(MAX_SPECULAR_PATH_COUNT);
             m_indexedSpecularPathsTmp.allocate(MAX_SPECULAR_PATH_COUNT);
@@ -1392,18 +1406,18 @@ public:
 #endif
 
         auto solveSpecular = [&](int K, EventDescriptor eDescriptor) {
-            char solveSpecularPath[128];
-            sprintf(solveSpecularPath, "solveSpecularPath_K%d", K);
-
+            
             //sw.start();
 
-            oroMemsetD32Async(m_specularPathCounter.data(), 0, 1, nullptr);
+            oroMemsetD32Async(m_specularPathBuckets.data(), 0, m_specularPathBuckets.size(), nullptr);
+            oroMemsetD32Async(m_specularPathBucketCounter.data(), 0, m_specularPathBucketCounter.size(), nullptr);
+            oroMemsetD32Async(m_specularPathPsumIterator.data(), 0, m_specularPathPsumIterator.size(), nullptr);
 
-            m_shader->launch("lookupFlatten",
+            m_shader->launch("binningSpecularPaths",
                 ShaderArgument()
                 .value(eDescriptor)
-                .value(m_specularPaths.data())
-                .value(m_specularPathCounter.data())
+                .value(m_specularPathBuckets.data())
+                .value(m_specularPathBucketCounter.data())
                 .value(m_firstDiffuses.data())
                 .value(int2{ m_imageWidth, m_imageHeight })
                 .ptr(&m_pathCache),
@@ -1412,8 +1426,75 @@ public:
                 0
             );
 
+            //TypedBuffer<uint32_t> counters(TYPED_BUFFER_HOST);
+            //counters << m_specularPathBucketCounter;
+
+            //int value = 0;
+            //for (int i = 0; i < counters.size(); i++)
+            //{
+            //    int cur = counters[i];
+            //    counters[i] = value;
+            //    value += cur;
+            //}
+
+            m_shader->launch("prefixScanSpecularPath",
+                ShaderArgument()
+                .value(m_specularPathBucketCounter.data())
+                .value((uint64_t *)m_specularPathPsumIterator.data()),
+                MAX_SPECULAR_PATH_BUCKET_SIZE / PSUM_SCAN_BLOCK_SIZE, 1, 1,
+                PSUM_SCAN_BLOCK_SIZE, 1, 1,
+                0
+            );
+
             uint32_t nPaths = 0;
-            oroMemcpyDtoH(&nPaths, m_specularPathCounter.data(), sizeof(uint32_t));
+            oroMemcpyDtoH(&nPaths, m_specularPathPsumIterator.data(), sizeof(uint32_t));
+
+            // uint32_t nTotalPaths = 0;
+
+            //TypedBuffer<uint32_t> scanned(TYPED_BUFFER_HOST);
+            //scanned << m_specularPathBucketCounter;
+
+            //for (int i = 0; i < counters.size(); i++)
+            //{
+            //    assert(scanned[i] == counters[i]);
+            //}
+
+            m_shader->launch("flattenSpecularPaths",
+                ShaderArgument()
+                .value(eDescriptor)
+                .value(m_specularPaths.data())
+                .value(m_specularPathBucketCounter.data())
+                .value(m_firstDiffuses.data())
+                .value(int2{ m_imageWidth, m_imageHeight })
+                .ptr(&m_pathCache),
+                div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
+                16, 16, 1,
+                0
+            );
+
+
+            //sw.stop();
+            //printf("preprocess %f\n", sw.getElapsedMs());
+
+            //sw.start();
+
+            //oroMemsetD32Async(m_specularPathCounter.data(), 0, 1, nullptr);
+
+            //m_shader->launch("lookupFlatten",
+            //    ShaderArgument()
+            //    .value(eDescriptor)
+            //    .value(m_specularPaths.data())
+            //    .value(m_specularPathCounter.data())
+            //    .value(m_firstDiffuses.data())
+            //    .value(int2{ m_imageWidth, m_imageHeight })
+            //    .ptr(&m_pathCache),
+            //    div_round_up64(m_imageWidth, 16), div_round_up64(m_imageHeight, 16), 1,
+            //    16, 16, 1,
+            //    0
+            //);
+
+            //uint32_t nPaths = 0;
+            //oroMemcpyDtoH(&nPaths, m_specularPathCounter.data(), sizeof(uint32_t));
 
             //sw.stop();
             //printf("lookupFlatten %f\n", sw.getElapsedMs());
@@ -1440,38 +1521,44 @@ public:
 
                 //sw.start();
 
-                m_shader->launch("toIndexed",
-                    ShaderArgument()
-                    .value(m_indexedSpecularPaths.data())
-                    .value(m_specularPaths.data())
-                    .value(nPaths),
-                    div_round_up64(nPaths, 256), 1, 1,
-                    256, 1, 1,
-                    0
-                );
+                //m_shader->launch("toIndexed",
+                //    ShaderArgument()
+                //    .value(m_indexedSpecularPaths.data())
+                //    .value(m_specularPaths.data())
+                //    .value(nPaths),
+                //    div_round_up64(nPaths, 256), 1, 1,
+                //    256, 1, 1,
+                //    0
+                //);
+
+                ////sw.stop();
+                ////printf("toIndexed %f\n", sw.getElapsedMs());
+
+                ////sw.start();
+                //m_onesweep->sort({ (uint64_t*)m_indexedSpecularPaths.data(), 0 }, { (uint64_t*)m_indexedSpecularPathsTmp.data(), 0 }, nPaths, 0, sizeof(uint32_t) * 8, 0);
+                ////sw.stop();
+                ////printf("m_onesweep->sort %f\n", sw.getElapsedMs());
 
                 //sw.stop();
-                //printf("toIndexed %f\n", sw.getElapsedMs());
+                //printf("old all preprocess %f\n", sw.getElapsedMs());
+
+                //m_shader->launch("reorderSpecularPath",
+                //    ShaderArgument()
+                //    .value(m_indexedSpecularPaths.data())
+                //    .value(m_specularPathsTmp.data())
+                //    .value(m_specularPaths.data())
+                //    .value(nPaths),
+                //    div_round_up64(nPaths, 256), 1, 1,
+                //    256, 1, 1,
+                //    0
+                //);
+
+                //m_specularPaths.swap(&m_specularPathsTmp);
 
                 //sw.start();
-                m_onesweep->sort({ (uint64_t*)m_indexedSpecularPaths.data(), 0 }, { (uint64_t*)m_indexedSpecularPathsTmp.data(), 0 }, nPaths, 0, sizeof(uint32_t) * 8, 0);
-                //sw.stop();
-                //printf("m_onesweep->sort %f\n", sw.getElapsedMs());
 
-                m_shader->launch("reorderSpecularPath",
-                    ShaderArgument()
-                    .value(m_indexedSpecularPaths.data())
-                    .value(m_specularPathsTmp.data())
-                    .value(m_specularPaths.data())
-                    .value(nPaths),
-                    div_round_up64(nPaths, 256), 1, 1,
-                    256, 1, 1,
-                    0
-                );
-
-                m_specularPaths.swap(&m_specularPathsTmp);
-
-                //sw.start();
+                char solveSpecularPath[128];
+                sprintf(solveSpecularPath, "solveSpecularPath_K%d", K);
 
                 m_shader->launch(solveSpecularPath,
                     ShaderArgument()
@@ -1552,6 +1639,11 @@ public:
     StackBufferAllocator m_stackBufferAllocator;
 
     TypedBuffer<SpecularPath> m_specularPaths = { TYPED_BUFFER_DEVICE };
+
+    TypedBuffer<uint32_t> m_specularPathBuckets = { TYPED_BUFFER_DEVICE };
+    TypedBuffer<uint32_t> m_specularPathBucketCounter = { TYPED_BUFFER_DEVICE };
+    TypedBuffer<uint32_t> m_specularPathPsumIterator = { TYPED_BUFFER_DEVICE };
+
     TypedBuffer<SpecularPath> m_specularPathsTmp = { TYPED_BUFFER_DEVICE };
     TypedBuffer<IndexedSpecularPath> m_indexedSpecularPaths = { TYPED_BUFFER_DEVICE };
     TypedBuffer<IndexedSpecularPath> m_indexedSpecularPathsTmp = { TYPED_BUFFER_DEVICE };
