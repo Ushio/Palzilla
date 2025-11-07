@@ -368,7 +368,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     accumulators[pixel] += {L.x, L.y, L.z, 1.0f};
 }
 
-extern "C" __global__ void lookupFlatten(EventDescriptor eDescriptor, SpecularPath* specularPaths, uint32_t *specularPathCounter, const FirstDiffuse* firstDiffuses, int2 imageSize, PathCache pathCache )
+extern "C" __global__ void lookupFlatten(EventDescriptor eDescriptor, SpecularPath* specularPaths, IndexedSpecularPath* indexedSpecularPaths, uint32_t *specularPathCounter, const FirstDiffuse* firstDiffuses, int2 imageSize, PathCache pathCache )
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
     int yi = threadIdx.y + blockDim.y * blockIdx.y;
@@ -402,9 +402,12 @@ extern "C" __global__ void lookupFlatten(EventDescriptor eDescriptor, SpecularPa
 
     int iPath = 0;
     pathCache.lookUpIndex(p, eDescriptor, [&](int index) {
-        specularPaths[head + iPath].pixel = pixel;
-        specularPaths[head + iPath].cacheIndex = index;
-        specularPaths[head + iPath].hashOfPath = pathCache.m_hashsOfPath[index];
+        int dstIndex = head + iPath;
+        specularPaths[dstIndex].pixel = pixel;
+        specularPaths[dstIndex].cacheIndex = index;
+
+        indexedSpecularPaths[dstIndex].hashOfPath = pathCache.m_hashsOfPath[index];
+        indexedSpecularPaths[dstIndex].index = dstIndex;
 
         iPath++;
     });
@@ -503,18 +506,6 @@ extern "C" __global__ void pack( uint32_t* pixels, float4* accumulators, int n )
         srgb_oetf(acc.z / acc.w),
         1.0f }
     );
-}
-
-extern "C" __global__ void toIndexed(IndexedSpecularPath* indexedSpecularPaths, const SpecularPath* specularPath, int n)
-{
-    int xi = threadIdx.x + blockDim.x * blockIdx.x;
-    if (n <= xi)
-    {
-        return;
-    }
-
-    indexedSpecularPaths[xi].hashOfPath = specularPath[xi].hashOfPath;
-    indexedSpecularPaths[xi].index = xi;
 }
 
 extern "C" __global__ void reorderSpecularPath(IndexedSpecularPath* indexedSpecularPaths, SpecularPath* dstSpecularPath, const SpecularPath* srcSpecularPath, int n)

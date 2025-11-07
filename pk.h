@@ -1044,7 +1044,6 @@ struct SpecularPath
 {
     int pixel;
     int cacheIndex;
-    uint32_t hashOfPath;
 };
 struct IndexedSpecularPath
 {
@@ -1403,6 +1402,7 @@ public:
                 ShaderArgument()
                 .value(eDescriptor)
                 .value(m_specularPaths.data())
+                .value(m_indexedSpecularPaths.data())
                 .value(m_specularPathCounter.data())
                 .value(m_firstDiffuses.data())
                 .value(int2{ m_imageWidth, m_imageHeight })
@@ -1415,8 +1415,6 @@ public:
             uint32_t nPaths = 0;
             oroMemcpyDtoH(&nPaths, m_specularPathCounter.data(), sizeof(uint32_t));
 
-            //sw.stop();
-            //printf("lookupFlatten %f\n", sw.getElapsedMs());
 
             if (MAX_SPECULAR_PATH_COUNT <= nPaths)
             {
@@ -1435,23 +1433,7 @@ public:
                 //});
 
                 //oroMemcpyHtoD(m_specularPaths.data(), specularPaths.data(), sizeof(SpecularPath) * nPaths);
-
-                //m_onesweep->sort()
-
-                //sw.start();
-
-                m_shader->launch("toIndexed",
-                    ShaderArgument()
-                    .value(m_indexedSpecularPaths.data())
-                    .value(m_specularPaths.data())
-                    .value(nPaths),
-                    div_round_up64(nPaths, 256), 1, 1,
-                    256, 1, 1,
-                    0
-                );
-
-                //sw.stop();
-                //printf("toIndexed %f\n", sw.getElapsedMs());
+           
 
                 //sw.start();
                 m_onesweep->sort({ (uint64_t*)m_indexedSpecularPaths.data(), 0 }, { (uint64_t*)m_indexedSpecularPathsTmp.data(), 0 }, nPaths, 0, sizeof(uint32_t) * 8, 0);
