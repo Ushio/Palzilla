@@ -9,7 +9,7 @@
 #include "pk.h"
 #include "prth.hpp"
 
-#if 0
+#if 1
 // -- final render --
 int main()
 {

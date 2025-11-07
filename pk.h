@@ -1265,22 +1265,47 @@ public:
         });
 
         scene->visitPolyMesh([&](std::shared_ptr<const FPolyMeshEntity> polymesh) {
+            std::string name = polymesh->fullname();
+            AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
+            if (name == "/null2/cam2/lens/lens_details")
+            {
+                if (auto lensRadius = details->columnAsFloat("radius"))
+                {
+                    m_lensParams.R = lensRadius->get(0);
+                }
+                if (auto lensDistance = details->columnAsFloat("distance"))
+                {
+                    m_lensParams.distance = lensDistance->get(0);
+                }
+                if (auto lensThickness = details->columnAsFloat("thickness"))
+                {
+                    m_lensParams.thickness = lensThickness->get(0);
+                }
+            }
             if (polymesh->visible() == false)
             {
                 return;
             }
-            std::string name = polymesh->fullname();
             if (name == "/light/pointlight")
             {
                 m_p_light = polymesh->localToWorld() * glm::vec4(0, 0, 0, 1);
                 return;
             }
 
-            AttributeSpreadsheet* details = polymesh->attributeSpreadsheet(AttributeSpreadsheetType::Details);
+            //glm::mat4 localToWorld = polymesh->localToWorld();
+            //glm::mat3 nLocalToWorld = glm::inverseTranspose(localToWorld);
+
+            //bool lens = name == "/null2/cam2/lens/lens";
+
+            //if (lens)
+            //{
+            //    return;
+            //}
+
             Material material = Material::Diffuse;
             if (auto matCol = details->columnAsString("material"))
             {
-                const std::string& matString = details->columnAsString("material")->get(0);
+                const std::string& matString = matCol->get(0);
                 if (matString == "mirror")
                 {
                     material = Material::Mirror;
@@ -1307,9 +1332,15 @@ public:
                 for (int j = 0; j < nVerts; ++j)
                 {
                     glm::vec3 p = positions[indices[indexBase + j]];
-                    tri.vs[j] = { p.x, p.y, p.z };
-
                     glm::vec3 ns = normals[indexBase + j];
+
+                    //if (lens)
+                    //{
+                    //    p = localToWorld * glm::vec4(p, 1.0f);
+                    //    ns = nLocalToWorld * ns;
+                    //}
+
+                    tri.vs[j] = { p.x, p.y, p.z };
                     attrib.shadingNormals[j] = { ns.x, ns.y, ns.z };
                 }
 
