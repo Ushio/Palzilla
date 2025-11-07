@@ -310,6 +310,32 @@ int main() {
         DrawGrid(GridAxis::XZ, 1.0f, 10, { 128, 128, 128 });
         DrawXYZAxis(1.0f);
 
+#if 1
+        float radius = 0.6f;
+        static glm::vec3 center = { 0, 0, 0};
+        ManipulatePosition(camera, &center, 0.3f);
+        DrawSphere(center, radius, { 255, 255, 255 }, 16, 16);
+
+        static glm::vec3 P0 = { -0.580714, 0.861265, 1 };
+        static glm::vec3 P2 = { 0.0109809, -0.1, -0.239754f };
+        ManipulatePosition(camera, &P0, 0.3f);
+        ManipulatePosition(camera, &P2, 0.3f);
+        DrawText(P0, "P0");
+        DrawText(P2, "P2");
+
+        float3 ro = to(P0);
+        float3 rd = ( to(P2) - to(P0) );
+
+        float2 t = sphIntersect(ro, rd, to(center), radius);
+
+        //rd = normalize(rd);
+
+        DrawPoint(to(ro + rd * t.x), { 255, 0, 0 }, 5);
+        DrawPoint(to(ro + rd * t.y), { 0, 255, 0 }, 5);
+        DrawLine(to(ro + rd * t.x), to(ro + rd * t.y), { 255, 255, 255 });
+
+#endif
+
 #if 0
         static glm::vec3 P0 = { 0, 1, 1 };
         ManipulatePosition(camera, &P0, 0.3f);
@@ -1517,7 +1543,7 @@ int main() {
 #endif
 
         // Rendering
-#if 1
+#if 0
         static float light_intencity = 5.0f;
         //static glm::vec3 p_light = { -0.580714, 0.861265, 1 };
         //static glm::vec3 p_light = { -0.0703937, -0.0703937, 0.532479 };

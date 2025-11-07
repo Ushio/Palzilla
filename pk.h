@@ -44,6 +44,22 @@ PK_DEVICE inline float rayOffsetScale(float3 p)
     return maxElem * flt_eps * 128.0f;
 }
 
+// https://iquilezles.org/articles/intersectors/
+PK_DEVICE inline float2 sphIntersect(float3 ro, float3 rd, float3 ce, float ra)
+{
+    float len2rd = dot(rd, rd);
+    float3 oc = ro - ce;
+    float b = dot(oc, rd) / len2rd;
+    float c = dot(oc, oc) - ra * ra;
+    float h = b * b - c / len2rd;
+    if (h < 0.0f)
+    {
+        return make_float2(-1.0f); // no intersection
+    }
+    h = sqrtf(h);
+    return { -b - h, -b + h };
+}
+
 enum class Material : int
 {
     Diffuse,
@@ -1012,6 +1028,38 @@ PK_DEVICE inline float srgb_oetf( float r )
 
 #define INTEGRAL_OF_CMF_Y_IN_NM 118.51810464018001f
 
+PK_DEVICE inline bool solveLens(float3* ro, float3* rd, float3 cameraOrigin, float3 cameraForward, float distance, float thickness, float R, float eta)
+{
+    float3 lensOrigin = cameraOrigin + cameraForward * distance;
+    float3 center1 = lensOrigin + cameraForward * (R - thickness * 0.5f);
+    float3 center2 = lensOrigin - cameraForward * (R - thickness * 0.5f);
+
+    float t1 = sphIntersect(*ro, *rd, center1, R).x;
+    if (t1 < 0.0f)
+    {
+        return false;
+    }
+    float3 hit1 = (*ro) + (*rd) * t1;
+
+    float3 wo;
+    refraction_norm_free(&wo, -(*rd), hit1 - center1, eta);
+
+    *rd = wo;
+    *ro = hit1;
+
+    float t2 = sphIntersect(*ro, *rd, center2, R).x;
+    float3 hit2 = (*ro) + (*rd) * t2;
+
+    if (refraction_norm_free(&wo, -(*rd), hit2 - center2, eta) == false)
+    {
+        return false;
+    }
+
+    *rd = wo;
+    *ro = hit2;
+
+    return true;
+}
 
 class Texture8RGBX
 {

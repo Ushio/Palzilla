@@ -29,4 +29,13 @@ struct RayGenerator
         *ro = from;
         *rd = to - from;
     }
+
+    HELPER_MATH_DEVICE float3 forward() const
+    {
+        return normalize(cross(m_up, m_right));
+    }
+    HELPER_MATH_DEVICE float3 origin() const
+    {
+        return m_origin;
+    }
 };

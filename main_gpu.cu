@@ -237,6 +237,8 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
     float eta = cauchy(lambda);
 
+    solveLens(&ro, &rd, rayGenerator.origin(), rayGenerator.forward(), 0.6f /*distance*/, 0.05f/*thickness*/, 2.0f /*R*/, eta);
+
     bool hasDiffuseHit = false;
     minimum_lbvh::Hit hit_last;
     for (int d = 0; d < 32; d++)
