@@ -349,7 +349,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
         //L += reflectance * lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
         float contrib = lightIntencity / d2 * fmaxf(dot(normalize(toLight), n), 0.0f);
 
-        contrib = fminf(contrib, radianceClamp); // reason of variance. need to think
+        contrib = fminf(contrib, radianceClamp); 
 
         float3 xyz = {
             CIE_2015_10deg::cmf_x(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
@@ -414,7 +414,7 @@ extern "C" __global__ void lookupFlatten(EventDescriptor eDescriptor, SpecularPa
 }
 
 template <int K>
-__device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPaths, uint32_t specularPathCount, const FirstDiffuse* firstDiffuses, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, PathCache* pathCache, EventDescriptor eDescriptor, CauchyDispersion cauchy, int iteration)
+__device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPaths, uint32_t specularPathCount, const FirstDiffuse* firstDiffuses, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, PathCache* pathCache, EventDescriptor eDescriptor, CauchyDispersion cauchy, int iteration)
 {
     int xi = threadIdx.x + blockDim.x * blockIdx.x;
 
@@ -466,6 +466,8 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
 
             float contrib = throughput * lightIntencity / dAdwValue * fmaxf(dot(normalize(getVertex(K - 1, tris, parameters) - p), n), 0.0f);
 
+            contrib = fminf(contrib, radianceClamp);
+
             float3 xyz = {
                 CIE_2015_10deg::cmf_x(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
                 CIE_2015_10deg::cmf_y(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
@@ -482,9 +484,9 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
 }
 
 #define DECL_SOLVE_SPECULAR_PATH( k ) \
-extern "C" __global__ void __launch_bounds__(256) solveSpecularPath_K##k(float4* accumulators, SpecularPath* specularPaths, uint32_t specularPathCount, const FirstDiffuse* firstDiffuses, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, PathCache pathCache, EventDescriptor eDescriptor, CauchyDispersion cauchy, int iteration) \
+extern "C" __global__ void __launch_bounds__(256) solveSpecularPath_K##k(float4* accumulators, SpecularPath* specularPaths, uint32_t specularPathCount, const FirstDiffuse* firstDiffuses, const NodeIndex* rootNode, const InternalNode* internals, const Triangle* triangles, const TriangleAttrib* triangleAttribs, float3 p_light, float lightIntencity, float radianceClamp, PathCache pathCache, EventDescriptor eDescriptor, CauchyDispersion cauchy, int iteration) \
 {\
-    solveSpecularPath<k>(accumulators, specularPaths, specularPathCount, firstDiffuses, rootNode, internals, triangles, triangleAttribs, p_light, lightIntencity, &pathCache, eDescriptor, cauchy, iteration); \
+    solveSpecularPath<k>(accumulators, specularPaths, specularPathCount, firstDiffuses, rootNode, internals, triangles, triangleAttribs, p_light, lightIntencity, radianceClamp, &pathCache, eDescriptor, cauchy, iteration); \
 }
 
 DECL_SOLVE_SPECULAR_PATH(1);

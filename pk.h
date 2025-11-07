@@ -1467,6 +1467,7 @@ public:
                     .value(m_triangleAttribsDevice.data())
                     .value(to(m_p_light))
                     .value(m_lightIntencity)
+                    .value(m_radianceClamp)
                     .ptr(&m_pathCache)
                     .value(eDescriptor)
                     .value(cauchy)
@@ -1546,7 +1547,7 @@ public:
     glm::vec3 m_p_light = { -0.804876, 0.121239, -1.58616 };
     float m_lightIntencity = 5.0f;
     float m_minThroughput = 0.05f;
-    float m_radianceClamp = 5.0f;
+    float m_radianceClamp = 4.0f;
     pr::Camera3D m_camera;
 
     bool m_loadCamera = true;
