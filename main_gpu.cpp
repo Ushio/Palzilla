@@ -60,9 +60,10 @@ int main()
         pkRenderer.loadFrame(i);
         pkRenderer.clear();
 
+        bool useOptionalPath = 103 <= i && i <= 153;
         for (int j = 0; j < 32; j++)
         {
-            pkRenderer.step();
+            pkRenderer.step(useOptionalPath);
         }
 
         std::shared_ptr<Image2DRGBA8> image(new Image2DRGBA8());
@@ -125,7 +126,7 @@ int main()
     ITexture* texture = CreateTexture();
 
     bool syncLight = true;
-    int frameNumber = 166;
+    int frameNumber = 140;
 
     PKRenderer pkRenderer;
     
@@ -238,7 +239,78 @@ int main()
             pkRenderer.clear();
         }
 
+        if (ImGui::Button("save"))
+        {
+            image.saveAsPng("test.png");
+        }
+
         ImGui::Checkbox("loadCamera", &pkRenderer.m_loadCamera);
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+        if (ImGui::TreeNode("Path - 2"))
+        {
+            for (int e = 0; e < 1u << 2; e++)
+            {
+                EventDescriptor eDescriptor;
+                eDescriptor.m_events = e;
+                eDescriptor.m_size = 2;
+
+                std::string label;
+                for (int i = 0; i < eDescriptor.size(); i++)
+                {
+                    label += eDescriptor.get(i) == Event::R ? "R" : "T";
+                }
+                if (ImGui::Checkbox(label.c_str(), &pkRenderer.m_enabledPaths2[e]))
+                {
+                    pkRenderer.clear();
+                }
+            }
+
+            ImGui::TreePop();
+        }
+
+        if (ImGui::TreeNode("Path - 3"))
+        {
+            for (int e = 0; e < 1u << 3; e++)
+            {
+                EventDescriptor eDescriptor;
+                eDescriptor.m_events = e;
+                eDescriptor.m_size = 3;
+
+                std::string label;
+                for (int i = 0; i < eDescriptor.size(); i++)
+                {
+                    label += eDescriptor.get(i) == Event::R ? "R" : "T";
+                }
+                if (ImGui::Checkbox(label.c_str(), &pkRenderer.m_enabledPaths3[e]))
+                {
+                    pkRenderer.clear();
+                }
+            }
+
+            ImGui::TreePop();
+        }
+        if (ImGui::TreeNode("Path - 4"))
+        {
+            for (int e = 0; e < 1u << 4; e++)
+            {
+                EventDescriptor eDescriptor;
+                eDescriptor.m_events = e;
+                eDescriptor.m_size = 4;
+
+                std::string label;
+                for (int i = 0; i < eDescriptor.size(); i++)
+                {
+                    label += eDescriptor.get(i) == Event::R ? "R" : "T";
+                }
+                if (ImGui::Checkbox(label.c_str(), &pkRenderer.m_enabledPaths4[e]))
+                {
+                    pkRenderer.clear();
+                }
+            }
+
+            ImGui::TreePop();
+        }
         
         ImGui::End();
 

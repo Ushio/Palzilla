@@ -1221,9 +1221,6 @@ private:
 class PKRenderer
 {
 public:
-    PKRenderer()
-    {
-    }
     void setup(oroDevice device, const char* scene, const char* kernelDir)
     {
         using namespace pr;
@@ -1389,7 +1386,7 @@ public:
         }
     }
 
-    void step( bool runPhotonTrace = true )
+    void step( bool useOptionalPath = true )
     {
         using namespace pr;
 
@@ -1428,7 +1425,6 @@ public:
         //sw.stop();
         //printf("solvePrimary %f\n", sw.getElapsedMs());
 
-        if (runPhotonTrace)
         {
             m_pathCache.clear();
 
@@ -1572,10 +1568,56 @@ public:
             }
         };
 
+#if 1
         solveSpecular(1, { Event::T });
         solveSpecular(1, { Event::R });
-        solveSpecular(2, { Event::T, Event::T });
-        solveSpecular(4, { Event::T, Event::T, Event::T, Event::T });
+        solveSpecular(2, { Event::T, Event::T }); // high
+
+        if (useOptionalPath)
+        {
+            solveSpecular(3, { Event::T, Event::R, Event::T }); // mid
+            solveSpecular(3, { Event::T, Event::T, Event::T }); // mid
+        }
+
+        solveSpecular(4, { Event::T, Event::T, Event::T, Event::T }); // high
+#else
+        solveSpecular(1, { Event::T });
+        solveSpecular(1, { Event::R });
+
+        for (int e = 0; e < 1u << 2; e++)
+        {
+            EventDescriptor eDescriptor;
+            eDescriptor.m_events = e;
+            eDescriptor.m_size = 2;
+
+            if (m_enabledPaths2[e])
+            {
+                solveSpecular(eDescriptor.size(), eDescriptor);
+            }
+        }
+        for (int e = 0; e < 1u << 3; e++)
+        {
+            EventDescriptor eDescriptor;
+            eDescriptor.m_events = e;
+            eDescriptor.m_size = 3;
+
+            if (m_enabledPaths3[e])
+            {
+                solveSpecular(eDescriptor.size(), eDescriptor);
+            }
+        }
+        for (int e = 0; e < 1u << 4; e++)
+        {
+            EventDescriptor eDescriptor;
+            eDescriptor.m_events = e;
+            eDescriptor.m_size = 4;
+
+            if (m_enabledPaths4[e])
+            {
+                solveSpecular(eDescriptor.size(), eDescriptor);
+            }
+        }
+#endif
 
         m_iteration++;
     }
@@ -1600,6 +1642,11 @@ public:
 
         imageOut->allocate(m_imageWidth, m_imageHeight);
         oroMemcpyDtoH(imageOut->data(), m_pixels.data(), m_pixels.bytes());
+    }
+
+    PKRenderer()
+    {
+
     }
 
     std::unique_ptr<Shader> m_shader;
@@ -1645,6 +1692,10 @@ public:
 
     bool m_loadCamera = true;
     int m_iteration = 0;
+
+    bool m_enabledPaths2[1u << 2] = {};
+    bool m_enabledPaths3[1u << 3] = {};
+    bool m_enabledPaths4[1u << 4] = {};
 };
 
 struct InternalNormalBound
