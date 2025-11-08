@@ -259,8 +259,8 @@ struct PathCache
         }
         else
         {
-            oroMemsetD32(m_numberOfCached.data(), 0, 1);
-            oroMemsetD32(m_hashsOfPath.data(), 0, m_hashsOfPath.size());
+            oroMemsetD32Async(m_numberOfCached.data(), 0, 1, 0);
+            oroMemsetD32Async(m_hashsOfPath.data(), 0, m_hashsOfPath.size(), 0);
         }
     }
     uint32_t atomicCAS(uint32_t* address, uint32_t compare, uint32_t val)
@@ -1582,7 +1582,7 @@ public:
 
     void clear()
     {
-        oroMemsetD8(m_accumulators.data(), 0, m_accumulators.size() * sizeof(float4));
+        oroMemsetD8Async(m_accumulators.data(), 0, m_accumulators.size() * sizeof(float4), 0);
         m_iteration = 0;
     }
 
