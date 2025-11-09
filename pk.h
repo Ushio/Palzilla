@@ -2189,6 +2189,7 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                                 break;
                             }
                         }
+                        inMedium = !inMedium;
                     }
 
                     if (interval::zeroIncluded(interval::cross(wo_next, wo_intr)) == false)
@@ -2197,7 +2198,6 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
                         break;
                     }
 
-                    inMedium = !inMedium;
                     wi_intr = -wo_next;
                 }
 #endif
