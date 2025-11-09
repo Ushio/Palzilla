@@ -1841,32 +1841,32 @@ inline void traverseAdmissibleNodes(EventDescriptor admissibleEvents, float eta,
             }
 
             // Geometric constraints at beg and end when mesh is closed
-            {
-                int index_beg = admissibleTriangles.indices[0];
-                minimum_lbvh::Triangle tri_beg = tris[index_beg];
-                float3 ng = minimum_lbvh::unnormalizedNormalOf(tri_beg);
+            //{
+            //    int index_beg = admissibleTriangles.indices[0];
+            //    minimum_lbvh::Triangle tri_beg = tris[index_beg];
+            //    float3 ng = minimum_lbvh::unnormalizedNormalOf(tri_beg);
 
-                // light weight winding correction
-                ng *= dot(ng, attribs[index_beg].shadingNormals[0]);
+            //    // light weight winding correction
+            //    ng *= dot(ng, attribs[index_beg].shadingNormals[0]);
 
-                if (dot(ng, p_beg) < dot(ng, tri_beg.vs[0]))
-                {
-                    invalid = true;
-                }
-            }
-            {
-                int index_end = admissibleTriangles.indices[K - 1];
-                minimum_lbvh::Triangle tri_end = tris[index_end];
-                float3 ng = minimum_lbvh::unnormalizedNormalOf(tri_end);
+            //    if (dot(ng, p_beg) < dot(ng, tri_beg.vs[0]))
+            //    {
+            //        invalid = true;
+            //    }
+            //}
+            //{
+            //    int index_end = admissibleTriangles.indices[K - 1];
+            //    minimum_lbvh::Triangle tri_end = tris[index_end];
+            //    float3 ng = minimum_lbvh::unnormalizedNormalOf(tri_end);
 
-                // light weight winding correction
-                ng *= dot(ng, attribs[index_end].shadingNormals[0]);
+            //    // light weight winding correction
+            //    ng *= dot(ng, attribs[index_end].shadingNormals[0]);
 
-                if (dot(ng, p_end) < dot(ng, tri_end.vs[0]))
-                {
-                    invalid = true;
-                }
-            }
+            //    if (dot(ng, p_end) < dot(ng, tri_end.vs[0]))
+            //    {
+            //        invalid = true;
+            //    }
+            //}
 
             if (invalid == false)
             {
