@@ -159,7 +159,8 @@ int main() {
     SetDataDir(ExecutableDir());
     AbcArchive archive;
     std::string err;
-    archive.open(GetDataPath("assets/scene.abc"), err);
+    //archive.open(GetDataPath("assets/scene.abc"), err);
+    archive.open(GetDataPath("assets/experiments.abc"), err);
     std::shared_ptr<FScene> scene = archive.readFlat(50, err);
 
     int debug_index = 10;
@@ -310,7 +311,7 @@ int main() {
         DrawGrid(GridAxis::XZ, 1.0f, 10, { 128, 128, 128 });
         DrawXYZAxis(1.0f);
 
-#if 1
+#if 0
         float radius = 0.6f;
         static glm::vec3 center = { 0, 0, 0};
         ManipulatePosition(camera, &center, 0.3f);
@@ -572,11 +573,11 @@ int main() {
         interval::intr3 wi_range = interval::relax(interval::make_intr3(wi_unnormalized.x, wi_unnormalized.y, wi_unnormalized.z), margin);
         interval::intr3 wo_range;
         
-        //DrawAABB(wi_range, { 255, 0, 0 }, 1);
-        //if (interval::refraction_norm_free(&wo_range, wi_range, interval::make_intr3(N), eta))
-        //{
-        //    DrawAABB(wo_range, { 0, 255, 0 }, 1);
-        //}
+        DrawAABB(wi_range, { 255, 0, 0 }, 1);
+        if (interval::refraction_norm_free(&wo_range, wi_range, interval::make_intr3(N), eta))
+        {
+            DrawAABB(wo_range, { 0, 255, 0 }, 1);
+        }
 
         //interval::intr3 crs = cross(wo_range, interval::make_intr3(wo_unnormalized));
         //DrawAABB(crs, { 255, 255, 255 }, 1);
@@ -868,8 +869,14 @@ int main() {
         //static glm::vec3 P0 = { 1, 0.5f, 0 };
         //static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f };
 
+        // 2 
         static glm::vec3 P0 = { -0.580714, 0.861265, 1 };
-        static glm::vec3 P2 = { 0.0109809, -0.1, -0.239754f };
+        static glm::vec3 P2 = { 0.320707f, -0.1, -1.27548f };
+
+        // 3
+        //static glm::vec3 P0 = { -2.38419e-07, 0.916003f, 0.778953 };
+        //static glm::vec3 P2 = { 0.320707f, 0.791117f, -1.5077 };
+
         ManipulatePosition(camera, &P0, 0.3f);
         ManipulatePosition(camera, &P2, 0.3f);
 
@@ -967,11 +974,12 @@ int main() {
         int numberOfNewton = 0;
 
         enum {
-            K = 3
+            K = 2
         };
         int index = 0;
         float eta = 1.6f;
-        EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
+        EventDescriptor eDescriptor = { Event::T, Event::T };
+        // EventDescriptor eDescriptor = { Event::T, Event::T, Event::T };
 
         traverseAdmissibleNodes<K>(
             eDescriptor,
@@ -1006,21 +1014,21 @@ int main() {
                 minimum_lbvh::Triangle tri0 = deltaPolygonSoup.triangles[admissibleTriangles.indices[0]];
                 minimum_lbvh::Triangle tri1 = deltaPolygonSoup.triangles[admissibleTriangles.indices[1]];
 
-                if (debug_index == numberOfNewton)
-                {
-                    for (int j = 0; j < 3; ++j)
-                    {
-                        float3 v0 = tri0.vs[j];
-                        float3 v1 = tri0.vs[(j + 1) % 3];
-                        DrawLine(to(v0), to(v1), { 255, 0, 0 }, 4);
-                    }
-                    for (int j = 0; j < 3; ++j)
-                    {
-                        float3 v0 = tri1.vs[j];
-                        float3 v1 = tri1.vs[(j + 1) % 3];
-                        DrawLine(to(v0), to(v1), { 0, 255, 0 }, 2);
-                    }
-                }
+                //if (debug_index == numberOfNewton)
+                //{
+                //    for (int j = 0; j < 3; ++j)
+                //    {
+                //        float3 v0 = tri0.vs[j];
+                //        float3 v1 = tri0.vs[(j + 1) % 3];
+                //        DrawLine(to(v0), to(v1), { 255, 0, 0 }, 4);
+                //    }
+                //    for (int j = 0; j < 3; ++j)
+                //    {
+                //        float3 v0 = tri1.vs[j];
+                //        float3 v1 = tri1.vs[(j + 1) % 3];
+                //        DrawLine(to(v0), to(v1), { 0, 255, 0 }, 2);
+                //    }
+                //}
 
                 numberOfNewton++;
 
@@ -1049,7 +1057,11 @@ int main() {
                 }
 
                 float parameters[K * 2];
-                bool converged = solveConstraints<K>(parameters, to(P0), to(P2), tris, attribs, eta, eDescriptor, 32, 1.0e-10f);
+                for (int i = 0; i < K * 2; i++)
+                {
+                    parameters[i] = 1.0f / 3.0f;
+                }
+                bool converged = solveConstraints<K>(parameters, to(P0), to(P2), tris, attribs, eta, eDescriptor, 32, 1.0e-10f, 4);
 
                 if (converged)
                 {
@@ -1079,6 +1091,7 @@ int main() {
                         float3 ro = vertices[0];
                         float3 rd = vertices[1] - vertices[0];
 
+                        if(0)
                         for (int i = 0; i < 16; i++)
                         {
                             minimum_lbvh::Hit hit;
@@ -1151,6 +1164,123 @@ int main() {
 
 
 #endif 
+     
+#if 1
+        static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
+        ManipulatePosition(camera, &P0, 0.3f);
+
+        static glm::vec3 P2 = { -0.3f, -0.1f, 0.0f }; // refraction
+        ManipulatePosition(camera, &P2, 0.3f);
+
+        // Single Event
+        static minimum_lbvh::Triangle tri0 = {
+            float3 {2.3f, 1.5f, -1.0f},
+            float3 {-0.539949894f, 1.5f, -0.342208207f },
+            float3 {1.1f, 1.5f, 1.6f},
+        };
+        for (int i = 0; i < 3; i++)
+        {
+            ManipulatePosition(camera, (glm::vec3*)&tri0.vs[i], 0.3f);
+            DrawText(to(tri0.vs[i]), std::to_string(i));
+        }
+        for (int i = 0; i < 3; i++)
+        {
+            DrawLine(to(tri0.vs[i]), to(tri0.vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
+        }
+
+        enum {
+            K = 1
+        };
+        minimum_lbvh::Triangle admissibleTriangles[K] = { tri0 };
+
+        auto curved_dielectric = [](minimum_lbvh::Triangle tri, float curve) {
+            float3 center = (tri.vs[0] + tri.vs[1] + tri.vs[2]) / 3.0f;
+
+            float3 ng = minimum_lbvh::normalOf(tri);
+            float3 n0 = normalize(ng + normalize(tri.vs[0] - center) * curve);
+            float3 n1 = normalize(ng + normalize(tri.vs[1] - center) * curve);
+            float3 n2 = normalize(ng + normalize(tri.vs[2] - center) * curve);
+
+            return TriangleAttrib{ Material::Dielectric, { n0, n1, n2} };
+        };
+
+        TriangleAttrib admissibleAttribs[K] = {
+            curved_dielectric(admissibleTriangles[0], 0.0f),
+        };
+
+        for (int k = 0; k < K; k++)
+        {
+
+            for (int i = 0; i < 3; i++)
+            {
+                float3 v = admissibleTriangles[k].vs[i];
+                float3 n = admissibleAttribs[k].shadingNormals[i];
+                DrawArrow(to(v), to(v + n), 0.01f, { 0, 255, 0 });
+            }
+        }
+
+        static float initials[2] = { 1.0f / 3.0f, 1.0f / 3.0f };
+
+        EventDescriptor es = { Event::T };
+
+        const int nParameters = K * 2;
+        float parameters[nParameters];
+        for (int i = 0; i < nParameters; i++)
+        {
+            parameters[i] = initials[i];
+        }
+        bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 1.3f, es, 1024, 1.0e-7f, 4 /*warm up*/, [&](int iter, bool converged) {
+            float3 vertices[K + 2];
+            vertices[0] = to(P0);
+            vertices[K + 1] = to(P2);
+
+            float3 shadingNormals[K];
+
+            for (int k = 0; k < K; k++)
+            {
+                float param_u = parameters[k * 2 + 0];
+                float param_v = parameters[k * 2 + 1];
+
+                minimum_lbvh::Triangle tri = admissibleTriangles[k];
+
+                float3 e0 = tri.vs[1] - tri.vs[0];
+                float3 e1 = tri.vs[2] - tri.vs[0];
+                vertices[k + 1] = tri.vs[0] + e0 * param_u + e1 * param_v;
+
+                TriangleAttrib attrib = admissibleAttribs[k];
+                float3 ne0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
+                float3 ne1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
+                shadingNormals[k] = attrib.shadingNormals[0] + ne0 * param_u + ne1 * param_v;
+            }
+
+            for (int j = 0; j < K + 1; j++)
+            {
+                glm::vec3 a = to(vertices[j]);
+                glm::vec3 b = to(vertices[j + 1]);
+                if (converged)
+                {
+                    DrawLine(a, b, { 255, 64, 64 }, 2);
+                }
+                else
+                {
+                    DrawLine(a, b, { 64, 64, 64 }, 1);
+                }
+                DrawPoint(b, { 255, 255, 255 }, 4);
+                DrawText(b, std::to_string(iter));
+            }
+
+            // draw normal
+            if (converged)
+            {
+                for (int k = 0; k < K; k++)
+                {
+                    float3 v = vertices[k + 1];
+                    float3 n = shadingNormals[k];
+                    DrawArrow(to(v), to(v + n * 0.2f), 0.005f, { 0, 255, 255 });
+                }
+            }
+        });
+#endif
 
 #if 0
         //static float3 vs[3] = {
@@ -1419,18 +1549,18 @@ int main() {
         if (1)
         {
             // 2 Events
-            //static minimum_lbvh::Triangle tri1 = {
-            //    float3 {2.3f, 1.5f, -1.0f},
-            //    float3 {-0.539949894f, 1.5f, -0.342208207f },
-            //    float3 {1.1f, 1.5f, 1.6f},
-            //};
+            static minimum_lbvh::Triangle tri1 = {
+                float3 {2.3f, 1.5f, -1.0f},
+                float3 {-0.539949894f, 1.5f, -0.342208207f },
+                float3 {1.1f, 1.5f, 1.6f},
+            };
 
             // difficult case
-            static minimum_lbvh::Triangle tri1 = {
-                float3 {2.03422093f, 1.39305758f, -1.00000763f},
-                float3 {1.79971433f, 2.77619171f, -0.342213452 },
-                float3 {2.27829790f, 2.11103225f, 1.60000360f},
-            };
+            //static minimum_lbvh::Triangle tri1 = {
+            //    float3 {2.03422093f, 1.39305758f, -1.00000763f},
+            //    float3 {1.79971433f, 2.77619171f, -0.342213452 },
+            //    float3 {2.27829790f, 2.11103225f, 1.60000360f},
+            //};
 
             for (int i = 0; i < 3; i++)
             {
@@ -1477,10 +1607,7 @@ int main() {
                 }
             }
 
-            EventDescriptor es;
-            es.set(1, Event::T);
-            es.set(0, Event::T);
-
+            EventDescriptor es = { Event::T, Event::T };
 
             const int nParameters = K * 2;
             float parameters[nParameters];
@@ -1573,7 +1700,7 @@ int main() {
 
         // Photon Trace
         enum {
-            K = 2
+            K = 3
         };
         // EventDescriptor eDescriptor = { Event::R };
         // EventDescriptor eDescriptor = { Event::T, Event::T };
@@ -1794,7 +1921,7 @@ int main() {
 
                 int numberOfNewton = 0;
 
-                EventDescriptor eDescriptor = { Event::T, Event::T };
+                EventDescriptor eDescriptor = { Event::T, Event::R, Event::T };
                 pathCache.lookUp(p, eDescriptor, [&](const int triIndices[], const float photon_parameters[]) {
                     minimum_lbvh::Triangle tris[K];
                     TriangleAttrib attribs[K];
