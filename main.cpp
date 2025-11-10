@@ -1221,6 +1221,9 @@ int main() {
 
         static float initials[2] = { 1.0f / 3.0f, 1.0f / 3.0f };
 
+        float3 initialPoint = getVertex(0, admissibleTriangles, initials);
+        DrawSphere(to(initialPoint), 0.04f, { 255, 0, 0 });
+
         EventDescriptor es = { Event::T };
 
         const int nParameters = K * 2;
@@ -1994,8 +1997,8 @@ int main() {
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
 
-        //ImGui::SliderFloat("initials0", &initials[0], 0, 1);
-        //ImGui::SliderFloat("initials1", &initials[1], 0, 1);
+        ImGui::SliderFloat("initials0", &initials[0], 0, 1);
+        ImGui::SliderFloat("initials1", &initials[1], 0, 1);
         //ImGui::SliderFloat("initials2", &initials[2], 0, 1);
         //ImGui::SliderFloat("initials3", &initials[3], 0, 1);
         //ImGui::SliderFloat("light_intencity", &light_intencity, 0, 5);
