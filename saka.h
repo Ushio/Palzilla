@@ -96,6 +96,15 @@ namespace saka
         );
     }
 
+    SAKA_DEVICE inline dval atan2(dval a, dval b)
+    {
+        return details::binary(a, b,
+            [](float a, float b) { return atan2f(a, b); },
+            [](float a, float b) { return b / (a * a + b * b); }, // df/da
+            [](float a, float b) { return -a / (a * a + b * b); }  // df/db
+        );
+    }
+
     struct dval3
     {
         dval x;

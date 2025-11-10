@@ -510,11 +510,12 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
                 saka::dval3 wo = vertices[k + 2] - vertices[k + 1];
                 saka::dval3 n = shadingNormals[k];
 
+                // Mine
+#if 1
                 if (dot(wi, n).v < 0.0f)
                 {
                     minimum_lbvh::swap(&wi, &wo);
                 }
-
 
                 saka::dval3 wo_optimize;
                 if (eDescriptor.get(k) == Event::T)
@@ -527,6 +528,81 @@ PK_DEVICE inline bool solveConstraints(float parameters[K * 2], float3 p_beg, fl
                 }
 
                 saka::dval3 c = saka::cross(wo, wo_optimize);
+
+#endif
+
+                // SMS
+#if 0
+                if (dot(wi, n).v < 0.0f)
+                {
+                    minimum_lbvh::swap(&wi, &wo);
+                }
+
+                saka::dval3 wo_optimize;
+                if (eDescriptor.get(k) == Event::T)
+                {
+                    wo_optimize = saka::refraction_norm_free(wi, n, eta);
+                }
+                else
+                {
+                    wo_optimize = saka::reflection(wi, n);
+                }
+
+                saka::dval atan_xy_event = saka::atan2(wo_optimize.x, wo_optimize.y);
+                saka::dval atan_xy_cur = saka::atan2(wo.x, wo.y);
+
+                const float pi = 3.141592653589f;
+                if (pi < atan_xy_event.v - atan_xy_cur.v )
+                {
+                    atan_xy_event = atan_xy_event - pi;
+                }
+                if (pi < atan_xy_cur.v - atan_xy_event.v)
+                {
+                    atan_xy_cur = atan_xy_cur - pi;
+                }
+
+                saka::dval atan_yz_event = saka::atan2(wo_optimize.y, wo_optimize.z);
+                saka::dval atan_yz_cur = saka::atan2(wo.y, wo.z);
+                if (pi < atan_yz_event.v - atan_yz_cur.v)
+                {
+                    atan_yz_event = atan_yz_event - pi;
+                }
+                if (pi < atan_yz_cur.v - atan_yz_event.v)
+                {
+                    atan_yz_cur = atan_yz_cur - pi;
+                }
+
+                saka::dval3 c = {
+                    atan_xy_event - atan_xy_cur,
+                    atan_yz_event - atan_yz_cur,
+                    0.0f
+                };
+                
+#endif
+
+                // Path Cuts
+#if 0
+                if (dot(wi, n).v < 0.0f)
+                {
+                    minimum_lbvh::swap(&wi, &wo);
+                }
+
+                saka::dval3 c;
+                if (eDescriptor.get(k) == Event::T)
+                {
+                    saka::dval3 h = -normalize(normalize(wo) * eta + normalize(wi));
+                    c = normalize(n) - h;
+                }
+                else
+                {
+                    saka::dval3 h = normalize(normalize(wo) + normalize(wi));
+                    if (dot(wi, n).v < 0.0f)
+                    {
+                        h = -h;
+                    }
+                    c = normalize(n) - h;
+                }
+#endif
 
                 A(k * 3 + 0, i) = c.x.g;
                 A(k * 3 + 1, i) = c.y.g;
