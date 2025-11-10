@@ -149,7 +149,7 @@ int main() {
     Initialize(config);
 
     Camera3D camera;
-    camera.origin = { 2, 2, -2 };
+    camera.origin = { 3, 3, 3 };
     camera.lookat = { 0, 0, 0 };
 
     double e = GetElapsedTime();
