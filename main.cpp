@@ -1165,7 +1165,7 @@ int main() {
 
 #endif 
      
-#if 1
+#if 0
         static glm::vec3 P0 = { 2.0f, 2.0f, 0 };
         ManipulatePosition(camera, &P0, 0.3f);
 
@@ -1215,7 +1215,7 @@ int main() {
             {
                 float3 v = admissibleTriangles[k].vs[i];
                 float3 n = admissibleAttribs[k].shadingNormals[i];
-                DrawArrow(to(v), to(v + n), 0.01f, { 0, 255, 0 });
+                DrawArrow(to(v), to(v + n * 0.3f), 0.01f, { 0, 255, 0 });
             }
         }
 
@@ -1284,6 +1284,155 @@ int main() {
             }
         });
 #endif
+
+
+#if 1
+        // Deep Path
+        static glm::vec3 P0 = { 2.0f, 12.0f, 0 };
+        ManipulatePosition(camera, &P0, 0.3f);
+
+        static glm::vec3 P2 = { 0.455683f, -0.1f, 0.979296f }; // refraction
+        ManipulatePosition(camera, &P2, 0.3f);
+
+        // Single Event
+        static minimum_lbvh::Triangle tri0 = {
+            float3 {2.3f, 1.5f, -1.0f},
+            float3 {-0.539949894f, 1.5f, -0.342208207f },
+            float3 {1.1f, 1.5f, 1.6f},
+        };
+        //for (int i = 0; i < 3; i++)
+        //{
+        //    ManipulatePosition(camera, (glm::vec3*)&tri0.vs[i], 0.3f);
+        //    DrawText(to(tri0.vs[i]), std::to_string(i));
+        //}
+        //for (int i = 0; i < 3; i++)
+        //{
+        //    DrawLine(to(tri0.vs[i]), to(tri0.vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
+        //}
+
+        enum {
+            K = 30
+        };
+        EventDescriptor es;
+        for (int k = 0; k < K; k++)
+        {
+            es.push_back(Event::T);
+        }
+
+        minimum_lbvh::Triangle admissibleTriangles[K];
+
+        static int seed = 3;
+
+        PCG rng(seed, 3);
+        for (int k = 0; k < K; k++)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                admissibleTriangles[k].vs[i] = tri0.vs[i] + make_float3(rng.uniformf() * 0.2f, (K - k - 1) * 0.3f + rng.uniformf() * 0.2f, rng.uniformf() * 0.2f);
+            }
+
+            if (k % 2 == 1)
+            {
+                std::swap(admissibleTriangles[k].vs[1], admissibleTriangles[k].vs[2]);
+            }
+
+            auto tri = admissibleTriangles[k];
+            for (int i = 0; i < 3; i++)
+            {
+                DrawLine(to(tri.vs[i]), to(tri.vs[(i + 1) % 3]), { 64, 64, 64 }, 3);
+            }
+        }
+
+        auto curved_dielectric = [](minimum_lbvh::Triangle tri, float curve) {
+            float3 center = (tri.vs[0] + tri.vs[1] + tri.vs[2]) / 3.0f;
+
+            float3 ng = minimum_lbvh::normalOf(tri);
+            float3 n0 = normalize(ng + normalize(tri.vs[0] - center) * curve);
+            float3 n1 = normalize(ng + normalize(tri.vs[1] - center) * curve);
+            float3 n2 = normalize(ng + normalize(tri.vs[2] - center) * curve);
+            return TriangleAttrib{ Material::Dielectric, { n0, n1, n2} };
+        };
+
+        TriangleAttrib admissibleAttribs[K];
+        for (int k = 0; k < K; k++)
+        {
+            admissibleAttribs[k] = curved_dielectric(admissibleTriangles[k], 0.0f);
+        }
+
+        for (int k = 0; k < K; k++)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                float3 v = admissibleTriangles[k].vs[i];
+                float3 n = admissibleAttribs[k].shadingNormals[i];
+                DrawArrow(to(v), to(v + n * 0.15f), 0.01f, { 0, 255, 0 });
+            }
+        }
+
+        static float initials[2] = { 1.0f / 3.0f, 1.0f / 3.0f };
+
+        //float3 initialPoint = getVertex(0, admissibleTriangles, initials);
+        //DrawSphere(to(initialPoint), 0.04f, { 255, 0, 0 });
+
+        const int nParameters = K * 2;
+        float parameters[nParameters];
+        for (int i = 0; i < nParameters; i++)
+        {
+            parameters[i] = 1.0f / 3.0f;
+        }
+        bool converged = solveConstraints<K>(parameters, to(P0), to(P2), admissibleTriangles, admissibleAttribs, 1.3f, es, 1024, 1.0e-7f, 4 /*warm up*/, [&](int iter, bool converged) {
+            float3 vertices[K + 2];
+            vertices[0] = to(P0);
+            vertices[K + 1] = to(P2);
+
+            float3 shadingNormals[K];
+
+            for (int k = 0; k < K; k++)
+            {
+                float param_u = parameters[k * 2 + 0];
+                float param_v = parameters[k * 2 + 1];
+
+                minimum_lbvh::Triangle tri = admissibleTriangles[k];
+
+                float3 e0 = tri.vs[1] - tri.vs[0];
+                float3 e1 = tri.vs[2] - tri.vs[0];
+                vertices[k + 1] = tri.vs[0] + e0 * param_u + e1 * param_v;
+
+                TriangleAttrib attrib = admissibleAttribs[k];
+                float3 ne0 = attrib.shadingNormals[1] - attrib.shadingNormals[0];
+                float3 ne1 = attrib.shadingNormals[2] - attrib.shadingNormals[0];
+                shadingNormals[k] = attrib.shadingNormals[0] + ne0 * param_u + ne1 * param_v;
+            }
+
+            for (int j = 0; j < K + 1; j++)
+            {
+                glm::vec3 a = to(vertices[j]);
+                glm::vec3 b = to(vertices[j + 1]);
+                if (converged)
+                {
+                    DrawLine(a, b, { 255, 64, 64 }, 2);
+                }
+                else
+                {
+                    DrawLine(a, b, { 64, 64, 64 }, 1);
+                }
+                DrawPoint(b, { 255, 255, 255 }, 4);
+                //DrawText(b, std::to_string(iter));
+            }
+
+            // draw normal
+            if (converged)
+            {
+                for (int k = 0; k < K; k++)
+                {
+                    float3 v = vertices[k + 1];
+                    float3 n = shadingNormals[k];
+                    DrawArrow(to(v), to(v + n * 0.1f), 0.005f, { 0, 255, 255 });
+                }
+            }
+        });
+#endif
+
 
 #if 0
         //static float3 vs[3] = {
@@ -1996,9 +2145,11 @@ int main() {
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
+        ImGui::InputInt("seed", &seed);
+        
 
-        ImGui::SliderFloat("initials0", &initials[0], 0, 1);
-        ImGui::SliderFloat("initials1", &initials[1], 0, 1);
+        //ImGui::SliderFloat("initials0", &initials[0], 0, 1);
+        //ImGui::SliderFloat("initials1", &initials[1], 0, 1);
         //ImGui::SliderFloat("initials2", &initials[2], 0, 1);
         //ImGui::SliderFloat("initials3", &initials[3], 0, 1);
         //ImGui::SliderFloat("light_intencity", &light_intencity, 0, 5);
