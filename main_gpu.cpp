@@ -9,7 +9,7 @@
 #include "pk.h"
 #include "prth.hpp"
 
-#if 1
+#if 0
 // -- final render --
 int main()
 {
@@ -126,7 +126,7 @@ int main()
     ITexture* texture = CreateTexture();
 
     bool syncLight = true;
-    int frameNumber = 140;
+    int frameNumber = 58;
 
     PKRenderer pkRenderer;
     
@@ -134,7 +134,8 @@ int main()
     pkRenderer.m_camera.origin = { 1, 1, -1 };
     pkRenderer.m_camera.lookat = { 0, 0, 0 };
 
-    pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str(), GetDataPath("../").c_str());
+    //pkRenderer.setup(device, GetDataPath("assets/scene.abc").c_str(), GetDataPath("../").c_str());
+    pkRenderer.setup(device, GetDataPath("assets/spec.abc").c_str(), GetDataPath("../").c_str());
     pkRenderer.loadFrame(frameNumber);
 
     while (pr::NextFrame() == false) {
@@ -152,10 +153,10 @@ int main()
 
         PushGraphicState();
 
-        {
-            DrawGrid(GridAxis::XZ, 1.0f, 10, { 128, 128, 128 });
-            DrawXYZAxis(1.0f);
-        }
+        //{
+        //    DrawGrid(GridAxis::XZ, 1.0f, 10, { 128, 128, 128 });
+        //    DrawXYZAxis(1.0f);
+        //}
 
         //static glm::vec3 P2 = { 0.0109809, -0.1, -0.239754f };
         //ManipulatePosition(camera, &P2, 0.3f);
@@ -243,6 +244,8 @@ int main()
         {
             image.saveAsPng("test.png");
         }
+
+        ImGui::InputFloat("fovy", &pkRenderer.m_camera.fovy, 0.1f);
 
         ImGui::Checkbox("loadCamera", &pkRenderer.m_loadCamera);
 

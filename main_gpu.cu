@@ -4,6 +4,8 @@
 #include "sobol.h"
 #include "pk.h"
 
+//#define FULL_SPECTRUM 1
+
 using namespace minimum_lbvh;
 
 __device__ uint32_t packRGBA( float4 color )
@@ -66,19 +68,19 @@ extern "C" __global__ void __launch_bounds__(PHOTON_BLOCK_SIZE) photonTrace(cons
     minimum_lbvh::Triangle tri = triangles[iTri];
 
     // Skip backface
-    float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
-    float3 ns = attribs[iTri].shadingNormals[0];
-    ng *= dot(ng, ns);
-    if (dot(ng, p_light - tri.vs[0]) < 0.0f)
-    {
-        return;
-    }
+    //float3 ng = minimum_lbvh::unnormalizedNormalOf(tri);
+    //float3 ns = attribs[iTri].shadingNormals[0];
+    //ng *= dot(ng, ns);
+    //if (dot(ng, p_light - tri.vs[0]) < 0.0f)
+    //{
+    //    return;
+    //}
 
     enum {
         K = PHOTON_TRACE_MAX_DEPTH
     };
 
-    for (int j = 0; j < 1; j++)
+    for (int j = 0; j < 16; j++)
     {
         float2 params = {};
         sobol::shuffled_scrambled_sobol_2d(&params.x, &params.y, j * blockDim.x + threadIdx.x, iteration, iTri, 789);
@@ -237,8 +239,8 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
     float eta = cauchy(lambda);
 
-    solveLens(&ro, &rd, rayGenerator.origin(), rayGenerator.forward(), lensParams.distance, lensParams.thickness/*thickness*/, lensParams.R /*R*/, eta);
-
+    //solveLens(&ro, &rd, rayGenerator.origin(), rayGenerator.forward(), lensParams.distance, lensParams.thickness/*thickness*/, lensParams.R /*R*/, eta);
+    float3 throughput = { 1.0f, 1.0f, 1.0f };
     bool hasDiffuseHit = false;
     minimum_lbvh::Hit hit_last;
     for (int d = 0; d < 32; d++)
@@ -275,6 +277,9 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
         if (m == Material::Mirror)
         {
             e = Event::R;
+
+            float3 golden = { 1.0f, 0.89f, 0.53f };
+            throughput *= golden;
         }
         else if (m == Material::Dielectric)
         {
@@ -333,15 +338,17 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
     float3 toLight = p_light - p;
     float d2 = dot(toLight, toLight);
 
-#if 0
+#if 1
     float scale = 10.0f;
-    int x = floor(p.x * scale);
-    int z = floor(p.z * scale);
+    int x = abs( floor(p.x * scale) );
+    int z = abs( floor(p.z * scale) );
     float chess = (x + z) % 2;
     float3 reflectance = lerp(float3{ 0.5f, 0.5f, 0.5f }, float3{ 0.75f, 0.75f, 0.75f }, chess);
 #else
     float3 reflectance = floorTex.samplePoint(p.x, p.z);
 #endif
+
+    reflectance *= throughput;
 
     float3 L = {};
 
@@ -359,7 +366,12 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
             CIE_2015_10deg::cmf_z(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
         };
         float3 srgblinear = xyz2srgblinear(xyz);
+
+#if defined(FULL_SPECTRUM)
         L += reflectance /* diffuse reflectance */ * srgblinear * contrib / p_lambda;
+#else
+        L += reflectance /* diffuse reflectance */ * contrib;
+#endif
     }
 
     firstDiffuses[pixel].p = p;
@@ -447,7 +459,7 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
     for (int i = 0; i < K * 2; i++)
     {
         parameters[i] = thePath.parameters[i];
-        //parameters[i] = 1.0f / 3.0f;
+        parameters[i] = 1.0f / 3.0f;
     }
 
     float p_lambda = CIE_2015_10deg::cmf_y_pdf(lambda);
@@ -476,7 +488,14 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
                 CIE_2015_10deg::cmf_z(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
             };
             float3 srgblinear = xyz2srgblinear(xyz);
+#if defined(FULL_SPECTRUM)
             float3 L = R /* diffuse reflectance */ * srgblinear * contrib / p_lambda;
+#else
+            float3 L = R /* diffuse reflectance */ * contrib;
+#endif
+
+            float3 golden = { 1.0f, 0.89f, 0.53f};
+            L *= golden;
 
             atomicAdd(&accumulators[specularPath.pixel].x, L.x);
             atomicAdd(&accumulators[specularPath.pixel].y, L.y);

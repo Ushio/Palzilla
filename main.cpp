@@ -1286,7 +1286,7 @@ int main() {
 #endif
 
 
-#if 1
+#if 0
         // Deep Path
         static glm::vec3 P0 = { 2.0f, 12.0f, 0 };
         ManipulatePosition(camera, &P0, 0.3f);
@@ -1434,7 +1434,7 @@ int main() {
 #endif
 
 
-#if 0
+#if 1
         //static float3 vs[3] = {
         //    {2.3f, 1.0f, -1.0f},
         //    
@@ -1701,18 +1701,18 @@ int main() {
         if (1)
         {
             // 2 Events
-            static minimum_lbvh::Triangle tri1 = {
-                float3 {2.3f, 1.5f, -1.0f},
-                float3 {-0.539949894f, 1.5f, -0.342208207f },
-                float3 {1.1f, 1.5f, 1.6f},
-            };
+            //static minimum_lbvh::Triangle tri1 = {
+            //    float3 {2.3f, 1.5f, -1.0f},
+            //    float3 {-0.539949894f, 1.5f, -0.342208207f },
+            //    float3 {1.1f, 1.5f, 1.6f},
+            //};
 
             // difficult case
-            //static minimum_lbvh::Triangle tri1 = {
-            //    float3 {2.03422093f, 1.39305758f, -1.00000763f},
-            //    float3 {1.79971433f, 2.77619171f, -0.342213452 },
-            //    float3 {2.27829790f, 2.11103225f, 1.60000360f},
-            //};
+            static minimum_lbvh::Triangle tri1 = {
+                float3 {2.03422093f, 1.39305758f, -1.00000763f},
+                float3 {1.79971433f, 2.77619171f, -0.342213452 },
+                float3 {2.27829790f, 2.11103225f, 1.60000360f},
+            };
 
             for (int i = 0; i < 3; i++)
             {
@@ -2145,7 +2145,7 @@ int main() {
         ImGui::Text("fps = %f", GetFrameRate());
         ImGui::Checkbox("g_bruteforce", &g_bruteforce);
         ImGui::InputInt("debug_index", &debug_index);
-        ImGui::InputInt("seed", &seed);
+        //ImGui::InputInt("seed", &seed);
         
 
         //ImGui::SliderFloat("initials0", &initials[0], 0, 1);

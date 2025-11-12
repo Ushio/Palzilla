@@ -32,7 +32,7 @@
 #define PHOTON_BLOCK_SIZE 256
 #define PHOTON_TRACE_MAX_DEPTH 4
 
-#define MIN_VERTEX_DIST 1.0e-5f
+#define MIN_VERTEX_DIST 1.0e-10f
 
 //#define SHOW_VALID_CACHE 
 
@@ -224,7 +224,7 @@ struct PathCache
 {
     enum {
         MAX_PATH_LENGTH = PHOTON_TRACE_MAX_DEPTH,
-        CACHE_STORAGE_COUNT = 1u << 22
+        CACHE_STORAGE_COUNT = 1u << 24
     };
 
     struct TrianglePath
@@ -955,6 +955,11 @@ PK_DEVICE inline float dAdw(float3 ro, float3 rd, float3 p_end, minimum_lbvh::Tr
                 saka::make_dval3(attrib.shadingNormals[1]) * u +
                 saka::make_dval3(attrib.shadingNormals[2]) * v;
 
+            //saka::dval3 vert =
+            //    saka::make_dval3(tri.vs[0]) * w +
+            //    saka::make_dval3(tri.vs[1]) * u +
+            //    saka::make_dval3(tri.vs[2]) * v;
+
             saka::dval3 wi = -rd_j;
 
             saka::dval3 wo;
@@ -1169,7 +1174,7 @@ public:
     uint32_t m_height;
 };
 
-#define MAX_SPECULAR_PATH_COUNT (1u << 25)
+#define MAX_SPECULAR_PATH_COUNT (1u << 27)
 
 struct SpecularPath
 {
@@ -1445,7 +1450,7 @@ public:
 
         if (m_pixels.size() != imageWidth * imageHeight)
         {
-            m_pathCache.init(0.01f);
+            m_pathCache.init(0.03f);
 
             m_debugPoints.allocate(1 << 22);
             m_debugPointCount.allocate(1);
@@ -1470,7 +1475,8 @@ public:
         //DeviceStopwatch sw(0);
         //sw.start();
 
-        CauchyDispersion cauchy = BAF10_optical_glass();
+        // CauchyDispersion cauchy = BAF10_optical_glass();
+        CauchyDispersion cauchy(1.33f);
 
         RayGenerator rayGenerator;
         rayGenerator.lookat(to(m_camera.origin), to(m_camera.lookat), to(m_camera.up), m_camera.fovy, m_imageWidth, m_imageHeight);
@@ -1530,7 +1536,7 @@ public:
                 0
             );
 
-            // printf(" occ %f\n", m_pathCache.occupancy());
+            printf(" occ %f\n", m_pathCache.occupancy());
 
             //sw.stop();
             //printf("photonTrace %f\n", sw.getElapsedMs());
@@ -1645,17 +1651,17 @@ public:
         };
 
 #if 1
-        solveSpecular(1, { Event::T });
+        //solveSpecular(1, { Event::T });
         solveSpecular(1, { Event::R });
-        solveSpecular(2, { Event::T, Event::T }); // high
+        //solveSpecular(2, { Event::T, Event::T }); // high
 
-        if (useOptionalPath)
-        {
-            solveSpecular(3, { Event::T, Event::R, Event::T }); // mid
-            solveSpecular(3, { Event::T, Event::T, Event::T }); // mid
-        }
+        //if (useOptionalPath)
+        //{
+        //    solveSpecular(3, { Event::T, Event::R, Event::T }); // mid
+        //    solveSpecular(3, { Event::T, Event::T, Event::T }); // mid
+        //}
 
-        solveSpecular(4, { Event::T, Event::T, Event::T, Event::T }); // high
+        //solveSpecular(4, { Event::T, Event::T, Event::T, Event::T }); // high
 #else
         solveSpecular(1, { Event::T });
         solveSpecular(1, { Event::R });
@@ -1754,7 +1760,8 @@ public:
     int m_imageWidth = 0;
     int m_imageHeight = 0;
     pr::AbcArchive m_archive;
-    glm::vec3 m_p_light = { -0.804876, 0.121239, -1.58616 };
+    //glm::vec3 m_p_light = { 0.714786f, 1, -2.06795f };
+    glm::vec3 m_p_light = { 3, 3, 5 };
     float m_lightIntencity = 5.0f;
     float m_minThroughput = 0.05f;
     float m_radianceClamp = 4.0f;
