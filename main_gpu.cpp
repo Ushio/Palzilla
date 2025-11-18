@@ -246,6 +246,7 @@ int main()
 
         ImGui::Checkbox("loadCamera", &pkRenderer.m_loadCamera);
 
+#if defined(PATH_CHECK_MODE)
         ImGui::SetNextItemOpen(true, ImGuiCond_Once);
         if (ImGui::TreeNode("Path - 2"))
         {
@@ -311,6 +312,7 @@ int main()
 
             ImGui::TreePop();
         }
+#endif
         
         ImGui::End();
 

@@ -37,6 +37,9 @@
 
 //#define SHOW_VALID_CACHE 
 
+// interactive path check mode
+//#define PATH_CHECK_MODE
+
 PK_DEVICE inline float rayOffsetScale(float3 p)
 {
     p = fabs(p);
@@ -1569,7 +1572,7 @@ public:
             }
         };
 
-#if 1
+#if !defined(PATH_CHECK_MODE)
         solveSpecular(1, { Event::T });
         solveSpecular(1, { Event::R });
         solveSpecular(2, { Event::T, Event::T }); // high
