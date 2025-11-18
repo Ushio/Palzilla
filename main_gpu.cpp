@@ -212,7 +212,7 @@ int main()
         {
             pkRenderer.clear();
         }
-        if (ImGui::SliderFloat("lightIntencity", &pkRenderer.m_lightIntencity, 0, 10))
+        if (ImGui::SliderFloat("lightIntencity", &pkRenderer.m_lightIntencity, 0, 20))
         {
             pkRenderer.clear();
         }
