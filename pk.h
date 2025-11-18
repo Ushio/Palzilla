@@ -33,6 +33,7 @@
 #define PHOTON_TRACE_MAX_DEPTH 4
 
 #define MIN_VERTEX_DIST 1.0e-5f
+#define PI 3.14159265358979323846f
 
 //#define SHOW_VALID_CACHE 
 
@@ -1679,9 +1680,9 @@ public:
     int m_imageHeight = 0;
     pr::AbcArchive m_archive;
     glm::vec3 m_p_light = { -0.804876, 0.121239, -1.58616 };
-    float m_lightIntencity = 5.0f;
+    float m_lightIntencity = 16.0f;
     float m_minThroughput = 0.05f;
-    float m_radianceClamp = 4.0f;
+    float m_radianceClamp = 12.0f;
 
     LensParams m_lensParams = {
         0.6f,  // distance

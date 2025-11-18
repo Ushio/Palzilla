@@ -359,7 +359,7 @@ extern "C" __global__ void __launch_bounds__(16 * 16) solvePrimary(float4* accum
             CIE_2015_10deg::cmf_z(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
         };
         float3 srgblinear = xyz2srgblinear(xyz);
-        L += reflectance /* diffuse reflectance */ * srgblinear * contrib / p_lambda;
+        L += ( reflectance / PI ) /* diffuse brdf */ * srgblinear * contrib / p_lambda;
     }
 
     firstDiffuses[pixel].p = p;
@@ -476,7 +476,7 @@ __device__ void solveSpecularPath(float4* accumulators, SpecularPath* specularPa
                 CIE_2015_10deg::cmf_z(lambda) / INTEGRAL_OF_CMF_Y_IN_NM,
             };
             float3 srgblinear = xyz2srgblinear(xyz);
-            float3 L = R /* diffuse reflectance */ * srgblinear * contrib / p_lambda;
+            float3 L = (R / PI) /* diffuse brdf */ * srgblinear * contrib / p_lambda;
 
             atomicAdd(&accumulators[specularPath.pixel].x, L.x);
             atomicAdd(&accumulators[specularPath.pixel].y, L.y);
